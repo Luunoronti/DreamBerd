@@ -212,6 +212,25 @@ namespace DreamberdInterpreter
         }
     }
 
+    /// <summary>
+    /// Blok { ... }.
+    ///
+    /// Uwaga: na tym etapie to jest tylko "grupowanie" instrukcji.
+    /// Scope'y blokowe dojdą później.
+    /// </summary>
+    public sealed class BlockStatement : Statement
+    {
+        public IReadOnlyList<Statement> Statements
+        {
+            get;
+        }
+
+        public BlockStatement(IReadOnlyList<Statement> statements)
+        {
+            Statements = statements ?? throw new ArgumentNullException(nameof(statements));
+        }
+    }
+
     public abstract class Expression
     {
     }

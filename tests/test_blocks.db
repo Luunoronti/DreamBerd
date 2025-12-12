@@ -1,0 +1,51 @@
+// DreamBerd: test bloków { ... } + if/else z blokami + when z blokiem + reverse w bloku
+// Uruchom: DreamberdInterpreter.exe test_blocks.db  (albo jak masz inny runner, to analogicznie)
+
+print("=== BLOCK TEST: start ===")!
+
+var var x = 0!
+print("x = " + x)!
+
+// 1) Blok jako osobny statement
+{
+    print("enter block #1")!
+    x = x + 1!
+    print("x in block #1 = " + x)!
+}
+
+print("after block #1, x = " + x)!
+
+// 2) if/else gdzie then/else to bloki
+if (x == 1) {
+    print("if-then block runs (x == 1)")!
+    x = x + 10!
+    print("x after +10 = " + x)!
+} else {
+    print("if-else block runs (x != 1)")!
+}
+
+print("after if, x = " + x)!
+
+// 3) when z blokiem + zagnieżdżony blok
+when (x > 15) {
+    print("[when] x > 15, x = " + x)!
+    {
+        print("[when] nested block also works")!
+    }
+}
+
+print("bumping x to 16 (should trigger when)")!
+x = 16!
+
+// 4) reverse wewnątrz bloku (lokalnie dla bloku)
+// Uwaga: zgodnie z obecną semantyką reverse odwraca kierunek iteracji statementów
+// i dlatego powtórzy wcześniejsze linie w bloku i wyjdzie, NIE dojdzie do B2.
+print("reverse inside block test (B2 should NOT print)")!
+{
+    print("B0")!
+    print("B1")!
+    reverse!
+    print("B2 (should not happen)")!
+}
+
+print("=== BLOCK TEST: end ===")!

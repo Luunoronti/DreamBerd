@@ -78,6 +78,12 @@ namespace DreamberdInterpreter
 
         private Statement ParseStatement()
         {
+            // Blok { ... }
+            if (Match(TokenType.LeftBrace))
+            {
+                return ParseBlockStatementAfterOpeningBrace();
+            }
+
             // *** TU MUSI BYĆ OBSŁUGA IF ***
             if (Match(TokenType.If))
             {
@@ -122,6 +128,19 @@ namespace DreamberdInterpreter
             Expression expr = ParseExpression();
             bool debug = ParseTerminatorIsDebug();
             return new ExpressionStatement(expr, debug);
+        }
+
+        private Statement ParseBlockStatementAfterOpeningBrace()
+        {
+            var statements = new List<Statement>();
+
+            while (!Check(TokenType.RightBrace) && !IsAtEnd())
+            {
+                statements.Add(ParseStatement());
+            }
+
+            Consume(TokenType.RightBrace, "Expected '}' to close block.");
+            return new BlockStatement(statements);
         }
 
         private bool ParseTerminatorIsDebug()
@@ -251,9 +270,20 @@ namespace DreamberdInterpreter
             Expression condition = ParseExpression();
             Consume(TokenType.RightParen, "Expected ')' after when condition.");
 
-            Expression bodyExpr = ParseExpression();
-            bool isDebug = ParseTerminatorIsDebug();
-            var bodyStmt = new ExpressionStatement(bodyExpr, isDebug);
+            // Na razie wspieramy:
+            // when (cond) expr!
+            // oraz (bonus) when (cond) { ... }
+            Statement bodyStmt;
+            if (Match(TokenType.LeftBrace))
+            {
+                bodyStmt = ParseBlockStatementAfterOpeningBrace();
+            }
+            else
+            {
+                Expression bodyExpr = ParseExpression();
+                bool isDebug = ParseTerminatorIsDebug();
+                bodyStmt = new ExpressionStatement(bodyExpr, isDebug);
+            }
 
             return new WhenStatement(condition, bodyStmt);
         }
@@ -264,16 +294,13 @@ namespace DreamberdInterpreter
             Expression condition = ParseExpression();
             Consume(TokenType.RightParen, "Expected ')' after if condition.");
 
-            Expression thenExpr = ParseExpression();
-            bool thenDebug = ParseTerminatorIsDebug();
-            Statement thenStmt = new ExpressionStatement(thenExpr, thenDebug);
+            // Dopuszczamy zarówno pojedynczy statement (np. expr!), jak i blok { ... }
+            Statement thenStmt = ParseStatement();
 
             Statement? elseStmt = null;
             if (Match(TokenType.Else))
             {
-                Expression elseExpr = ParseExpression();
-                bool elseDebug = ParseTerminatorIsDebug();
-                elseStmt = new ExpressionStatement(elseExpr, elseDebug);
+                elseStmt = ParseStatement();
             }
 
             return new IfStatement(condition, thenStmt, elseStmt);
