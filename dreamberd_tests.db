@@ -55,7 +55,7 @@ function assertFalse(name, cond) => {
 }!
 
 // --------------------------------------------
-// 1) Podstawy: arytmetyka / stringi / undefined
+print("== 1) Podstawy: arytmetyka / stringi / undefined ==")!
 // --------------------------------------------
 assertEq("1 + 2 = 3", 3, 1 + 2)!
 assertEq("2 * 3 = 6", 6, 2 * 3)!
@@ -66,31 +66,39 @@ assertEq("division by zero => undefined", undefined, 1 / 0)!
 print("")!
 
 // --------------------------------------------
-// 2) 4-gałęziowy operator warunkowy
-//    cond ? t : f :: m ::: u
+print("== 2) 4-gałęziowy operator warunkowy ==")!
+print("     cond ? t : f :: m ::: u  ")!
 // --------------------------------------------
 assertEq("cond=true -> t", 1, true ? 1 : 2 :: 3 ::: 4)!
 assertEq("cond=false -> f", 2, false ? 1 : 2 :: 3 ::: 4)!
 assertEq("cond=maybe -> m", 3, maybe ? 1 : 2 :: 3 ::: 4)!
 assertEq("cond=undefined -> u", 4, undefined ? 1 : 2 :: 3 ::: 4)!
+assertEq("cond=maybe -> 2", 2, maybe ? 1 :: 2)!
+assertEq("cond=undefined -> 4", 4, undefined ? 1 ::: 4 :: 2 )!
+assertEq("cond=false -> 42", 42, false ? 1 ::: 4 : 42:: 2  )!
+
+
 
 print("")!
 
 // --------------------------------------------
-// 3) if + truthiness (maybe prawdziwe, undefined fałszywe)
+print("== 3) if + truthiness (maybe prawdziwe, undefined fałszywe) ==")!
 // --------------------------------------------
 function truthy(x) => {
     if (x) return true!
     else return false!
+    idk return maybe!
 }!
 
-assertEq("if(maybe) -> true", true, truthy(maybe))!
+assertEq("if(true) -> true", true, truthy(true))!
+assertEq("if(maybe) -> maybe", maybe, truthy(maybe))!
+assertEq("if(false) -> false", false, truthy(false))!
 assertEq("if(undefined) -> false", false, truthy(undefined))!
 
 print("")!
 
 // --------------------------------------------
-// 4) Tablice (indeks od -1) + przypisanie pod indeksem
+print("== 4) Tablice (indeks od -1) + przypisanie pod indeksem ==")!
 // --------------------------------------------
 var var arr = [10, 20, 30]!
 assertEq("arr[-1] == 10", 10, arr[-1])!
@@ -104,7 +112,7 @@ assertEq("arr[-1] after assignment == 77", 77, arr[-1])!
 print("")!
 
 // --------------------------------------------
-// 5) Historia zmiennych: previous/next/history
+print("== 5) Historia zmiennych: previous/next/history ==")!
 // --------------------------------------------
 var var x = 1!
 x = 2!
@@ -134,7 +142,7 @@ assertEq("history(x)[1] == 3", 3, hx[1])!
 print("")!
 
 // --------------------------------------------
-// 6) Funkcje + return + rekurencja
+print("== 6) Funkcje + return + rekurencja ==")!
 // --------------------------------------------
 function fact(n) => {
     if (n ==== 0) return 1!
@@ -146,7 +154,7 @@ assertEq("fact(5) == 120", 120, fact(5))!
 print("")!
 
 // --------------------------------------------
-// 7) while + break! + continue!
+print("== 7) while + break! + continue! ==")!
 // --------------------------------------------
 var var c = 0!
 while (true) {
@@ -167,7 +175,7 @@ assertEq("continue! skips exactly one add (i==3)", 40, sum)!
 print("")!
 
 // --------------------------------------------
-// 8) Bloki + reverse (lokalnie w bloku)
+print("== 8) Bloki + reverse (lokalnie w bloku) ==")!
 // --------------------------------------------
 var var r = 0!
 {
@@ -180,7 +188,7 @@ assertEq("reverse in block re-runs first stmt only", 2, r)!
 
 
 // --------------------------------------------
-// Overloading / priorytet deklaracji (wielokrotne '!')
+print("== Overloading / priorytet deklaracji (wielokrotne '!') ==")!
 // --------------------------------------------
 
 // Najnowsza deklaracja z tym samym priorytetem wygrywa

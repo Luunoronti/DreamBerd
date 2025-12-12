@@ -1,6 +1,4 @@
-using System;
 using System.Diagnostics;
-using System.IO;
 using System.Text;
 
 namespace DreamberdInterpreter
@@ -15,8 +13,8 @@ namespace DreamberdInterpreter
 
             if (args.Length > 0)
             {
-                string path = args[0];
-                string source = File.ReadAllText(path);
+                var path = args[0];
+                var source = File.ReadAllText(path);
 
                 try
                 {
@@ -60,7 +58,7 @@ namespace DreamberdInterpreter
             while (true)
             {
                 Console.Write(sb.Length == 0 ? "> " : "| ");
-                string? line = Console.ReadLine();
+                var line = Console.ReadLine();
                 if (line == null)
                     break;
 
@@ -72,7 +70,7 @@ namespace DreamberdInterpreter
                     if (sb.Length == 0)
                         continue;
 
-                    string source = sb.ToString();
+                    var source = sb.ToString();
                     sb.Clear();
 
                     try
@@ -102,15 +100,15 @@ namespace DreamberdInterpreter
             if (ex.Position is null)
                 return;
 
-            int pos = ex.Position.Value;
+            var pos = ex.Position.Value;
             if (pos < 0) pos = 0;
             if (pos > source.Length) pos = source.Length;
 
             // policz line/col oraz wytnij linię
-            int line = 1;
-            int lineStart = 0;
+            var line = 1;
+            var lineStart = 0;
 
-            for (int i = 0; i < pos && i < source.Length; i++)
+            for (var i = 0; i < pos && i < source.Length; i++)
             {
                 if (source[i] == '\n')
                 {
@@ -119,12 +117,12 @@ namespace DreamberdInterpreter
                 }
             }
 
-            int column = (pos - lineStart) + 1;
+            var column = (pos - lineStart) + 1;
 
-            int lineEnd = source.IndexOf('\n', lineStart);
+            var lineEnd = source.IndexOf('\n', lineStart);
             if (lineEnd < 0) lineEnd = source.Length;
 
-            string lineText = source.Substring(lineStart, lineEnd - lineStart);
+            var lineText = source.Substring(lineStart, lineEnd - lineStart);
             if (lineText.EndsWith("\r", StringComparison.Ordinal))
                 lineText = lineText.Substring(0, lineText.Length - 1);
 
@@ -132,7 +130,7 @@ namespace DreamberdInterpreter
             Console.WriteLine(lineText);
 
             // caret
-            int caretPos = Math.Max(1, column);
+            var caretPos = Math.Max(1, column);
             if (caretPos > lineText.Length + 1) caretPos = lineText.Length + 1;
 
             Console.WriteLine(new string(' ', caretPos - 1) + '^');

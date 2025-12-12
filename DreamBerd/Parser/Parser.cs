@@ -3,15 +3,12 @@ using System.Collections.Generic;
 
 namespace DreamberdInterpreter
 {
-    public sealed class Parser
+    public sealed partial class Parser
     {
         private readonly IReadOnlyList<Token> _tokens;
         private int _current;
 
-        public Parser(IReadOnlyList<Token> tokens)
-        {
-            _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
-        }
+        public Parser(IReadOnlyList<Token> tokens) => _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
 
         private bool IsAtEnd() => Peek().Type == TokenType.EndOfFile;
 
@@ -43,6 +40,8 @@ namespace DreamberdInterpreter
             }
             return false;
         }
+
+        private void Fatal(Token token, string message) => throw new InterpreterException(message + $" Found '{token.Lexeme}'.", token.Position);
 
         private Token Consume(TokenType type, string message)
         {
@@ -101,14 +100,16 @@ namespace DreamberdInterpreter
             if (Match(TokenType.Break))
             {
                 int pos = Previous().Position;
-                Consume(TokenType.Bang, "Expected '!' after 'break'.");
+                if (Check(TokenType.Bang))
+                    Consume(TokenType.Bang, "Expected '!' after 'break'.");
                 return new BreakStatement(pos);
             }
 
             if (Match(TokenType.Continue))
             {
                 int pos = Previous().Position;
-                Consume(TokenType.Bang, "Expected '!' after 'continue'.");
+                if (Check(TokenType.Bang))
+                    Consume(TokenType.Bang, "Expected '!' after 'continue'.");
                 return new ContinueStatement(pos);
             }
 
@@ -175,29 +176,6 @@ namespace DreamberdInterpreter
             return new BlockStatement(statements, position);
         }
 
-        private readonly struct TerminatorInfo
-        {
-            public bool IsDebug
-            {
-                get;
-            }
-
-            /// <summary>
-            /// Liczba wykrzykników na końcu statementu.
-            /// Dla terminatora '?' wartość wynosi 0.
-            /// </summary>
-            public int ExclamationCount
-            {
-                get;
-            }
-
-            public TerminatorInfo(bool isDebug, int exclamationCount)
-            {
-                IsDebug = isDebug;
-                ExclamationCount = exclamationCount;
-            }
-        }
-
         private TerminatorInfo ParseTerminator()
         {
             // Gulf of Mexico / DreamBerd: można dać wiele '!' na końcu statementu.
@@ -223,7 +201,9 @@ namespace DreamberdInterpreter
                 return new TerminatorInfo(isDebug: true, exclamationCount: 0);
             }
 
-            throw new InterpreterException("Expected '!' or '?' at end of statement.", Peek().Position);
+            // we do allow no ! or ? at the end
+            // throw new InterpreterException("Expected '!' or '?' at end of statement.", Peek().Position);
+            return new TerminatorInfo(isDebug: false, exclamationCount: 0);
         }
 
         private bool ParseTerminatorIsDebug() => ParseTerminator().IsDebug;
@@ -406,19 +386,28 @@ namespace DreamberdInterpreter
         private Statement ParseIfStatement(int position)
         {
             Consume(TokenType.LeftParen, "Expected '(' after 'if'.");
-            Expression condition = ParseExpression();
+            var condition = ParseExpression();
             Consume(TokenType.RightParen, "Expected ')' after if condition.");
 
             // Dopuszczamy zarówno pojedynczy statement (np. expr!), jak i blok { ... }
-            Statement thenStmt = ParseStatement();
+            var thenStmt = ParseStatement();
 
+            Statement? idkStmt = null;
             Statement? elseStmt = null;
-            if (Match(TokenType.Else))
+
+            for (var i = 0; i < 2; i++)
             {
-                elseStmt = ParseStatement();
+                if (Match(TokenType.Idk))
+                {
+                    idkStmt = ParseStatement();
+                }
+                if (Match(TokenType.Else))
+                {
+                    elseStmt = ParseStatement();
+                }
             }
 
-            return new IfStatement(condition, thenStmt, elseStmt, position);
+            return new IfStatement(condition, thenStmt, elseStmt, idkStmt, position);
         }
 
         private Statement ParseWhileStatement(int position)
@@ -464,21 +453,112 @@ namespace DreamberdInterpreter
 
                 Expression whenTrue = ParseAssignment();
 
-                Consume(TokenType.Colon, "Expected ':' after true branch of conditional expression.");
-                Expression whenFalse = ParseAssignment();
+                Expression? whenFalse = null;
+                Expression? whenMaybe = null;
+                Expression? whenUndefined = null;
 
-                // '::'
-                Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
-                Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
-                Expression whenMaybe = ParseAssignment();
+                int ConsumeColonRunUpTo3()
+                {
+                    var t = Peek();
+                    int run = 0;
+                    while (Match(TokenType.Colon))
+                    {
+                        run++;
+                        if (run > 3)
+                            throw new InterpreterException($"\"Too many ':' in conditional expression (max is ':::').\" '{t.Lexeme}'.", t.Position);
+                    }
+                    return run;
+                }
 
-                // ':::'
-                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
-                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
-                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
-                Expression whenUndefined = ParseAssignment();
+                // Optional branches after true:
+                // ':'   -> false
+                // '::'  -> maybe
+                // ':::' -> undefined
+
+                while (Check(TokenType.Colon))
+                {
+                    int run = ConsumeColonRunUpTo3();
+
+                    switch (run)
+                    {
+                        case 1:
+                            {
+                                // ':' (false) is only allowed if we haven't already parsed any other branch.
+                                //if (whenFalse != null || whenMaybe != null || whenUndefined != null)
+                                //    Fatal(Peek(), "Unexpected ':' here. False-branch (':') can only appear once and must be first.");
+
+                                whenFalse = ParseAssignment();
+                                break;
+                            }
+
+                        case 2:
+                            {
+                                // '::' (maybe) can't appear twice and can't appear after undefined.
+                                //if (whenMaybe != null)
+                                //    Fatal(Peek(), "Duplicate '::' (maybe) branch in conditional expression.");
+                                //if (whenUndefined != null)
+                                //    Fatal(Peek(), "Unexpected '::' after ':::' (undefined). Branches must be in order.");
+
+                                whenMaybe = ParseAssignment();
+                                break;
+                            }
+
+                        case 3:
+                            {
+                                // ':::' (undefined) can't appear twice and must be last.
+                                //if (whenUndefined != null)
+                                //    Fatal(Peek(), "Duplicate ':::' (undefined) branch in conditional expression.");
+
+                                whenUndefined = ParseAssignment();
+                                break;
+                                // undefined is last; if more ':' follow, that's an error
+                                //if (Check(TokenType.Colon))
+                                //    Fatal(Peek(), "Unexpected ':' after ':::' (undefined). Branches must end after undefined-branch.");
+                                // return new ConditionalExpression(expr, whenTrue, whenFalse, whenMaybe, whenUndefined, qPos);
+                            }
+                        default:
+                            Fatal(Peek(), "Expected ':', '::', or ':::' after true branch of conditional expression.");
+                            break;
+                    }
+                }
 
                 return new ConditionalExpression(expr, whenTrue, whenFalse, whenMaybe, whenUndefined, qPos);
+
+
+
+
+
+
+
+                //int qPos = Previous().Position;
+
+                //Expression whenTrue = ParseAssignment();
+
+                //Consume(TokenType.Colon, "Expected ':' after true branch of conditional expression.");
+                //Expression whenFalse = ParseAssignment();
+
+                //// '::' is optional
+                //if (Check(TokenType.Colon))
+                //{
+                //    Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
+                //    Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
+
+
+                //    // if there is one more ':', this is undefined only
+
+
+                //    Expression whenMaybe = ParseAssignment();
+                //}
+
+
+
+                //// ':::'
+                //Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+                //Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+                //Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+                //Expression whenUndefined = ParseAssignment();
+
+                //return new ConditionalExpression(expr, whenTrue, whenFalse, whenMaybe, whenUndefined, qPos);
             }
 
             return expr;

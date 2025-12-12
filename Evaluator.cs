@@ -318,6 +318,16 @@ namespace DreamberdInterpreter
                         Value cond = EvaluateExpression(ifs.Condition);
                         if (cond.IsTruthy())
                         {
+                            if (cond.Kind == ValueKind.Boolean)
+                            {
+                                if (cond.Bool == BooleanState.Maybe)
+                                {
+                                    if (ifs.IdkBranch != null)
+                                        return EvaluateStatement(ifs.IdkBranch);
+                                    else
+                                        return Value.Null;
+                                }
+                            }
                             return EvaluateStatement(ifs.ThenBranch);
                         }
                         else if (ifs.ElseBranch != null)
@@ -574,18 +584,20 @@ namespace DreamberdInterpreter
             // rozróżniamy true / false / maybe / undefined
             if (cond.Kind == ValueKind.Boolean)
             {
-                return cond.Bool switch
+                var expr = cond.Bool switch
                 {
-                    BooleanState.True => EvaluateExpression(condExpr.WhenTrue),
-                    BooleanState.False => EvaluateExpression(condExpr.WhenFalse),
-                    BooleanState.Maybe => EvaluateExpression(condExpr.WhenMaybe),
-                    _ => EvaluateExpression(condExpr.WhenFalse)
+                    BooleanState.True => condExpr.WhenTrue,
+                    BooleanState.False => condExpr.WhenFalse,
+                    BooleanState.Maybe => condExpr.WhenMaybe,
+                    _ => condExpr.WhenUndefined
                 };
+
+                return expr != null ? EvaluateExpression(expr) : Value.Undefined;
             }
 
             if (cond.Kind == ValueKind.Undefined)
             {
-                return EvaluateExpression(condExpr.WhenUndefined);
+                return condExpr.WhenUndefined != null ? EvaluateExpression(condExpr.WhenUndefined) : Value.Undefined;
             }
 
             // inne typy -> na podstawie IsTruthy -> true/false
@@ -595,7 +607,7 @@ namespace DreamberdInterpreter
             }
             else
             {
-                return EvaluateExpression(condExpr.WhenFalse);
+                return condExpr.WhenFalse != null ? EvaluateExpression(condExpr.WhenFalse) : Value.Undefined;
             }
         }
 
@@ -677,8 +689,12 @@ namespace DreamberdInterpreter
             return set;
         }
 
-        private void CollectDependencies(Expression expr, HashSet<string> deps, bool isCallee)
+        private void CollectDependencies(Expression? expr, HashSet<string> deps, bool isCallee)
         {
+            if (expr == null)
+            {
+                return;
+            }
             switch (expr)
             {
                 case null:

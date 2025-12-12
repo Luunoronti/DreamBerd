@@ -185,13 +185,15 @@ namespace DreamberdInterpreter
         public Expression Condition { get; }
         public Statement ThenBranch { get; }
         public Statement? ElseBranch { get; }
+        public Statement? IdkBranch { get; }
 
-        public IfStatement(Expression condition, Statement thenBranch, Statement? elseBranch, int position)
+        public IfStatement(Expression condition, Statement thenBranch, Statement? elseBranch, Statement? idkBranch, int position)
             : base(position)
         {
             Condition = condition ?? throw new ArgumentNullException(nameof(condition));
             ThenBranch = thenBranch ?? throw new ArgumentNullException(nameof(thenBranch));
             ElseBranch = elseBranch;
+            IdkBranch = idkBranch;
         }
     }
 
@@ -380,24 +382,24 @@ namespace DreamberdInterpreter
     {
         public Expression Condition { get; }
         public Expression WhenTrue { get; }
-        public Expression WhenFalse { get; }
-        public Expression WhenMaybe { get; }
-        public Expression WhenUndefined { get; }
+        public Expression? WhenFalse { get; }
+        public Expression? WhenMaybe { get; }
+        public Expression? WhenUndefined { get; }
 
         public ConditionalExpression(
             Expression condition,
             Expression whenTrue,
-            Expression whenFalse,
-            Expression whenMaybe,
-            Expression whenUndefined,
+            Expression? whenFalse,
+            Expression? whenMaybe,
+            Expression? whenUndefined,
             int position)
             : base(position)
         {
             Condition = condition ?? throw new ArgumentNullException(nameof(condition));
             WhenTrue = whenTrue ?? throw new ArgumentNullException(nameof(whenTrue));
-            WhenFalse = whenFalse ?? throw new ArgumentNullException(nameof(whenFalse));
-            WhenMaybe = whenMaybe ?? throw new ArgumentNullException(nameof(whenMaybe));
-            WhenUndefined = whenUndefined ?? throw new ArgumentNullException(nameof(whenUndefined));
+            WhenFalse = whenFalse;
+            WhenMaybe = whenMaybe;
+            WhenUndefined = whenUndefined;
         }
     }
 }

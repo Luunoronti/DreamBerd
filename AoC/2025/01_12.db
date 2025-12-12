@@ -1,18 +1,20 @@
-// AoC 2025 / Day 01 / Part 1 (DreamBerd edition)
-// "The safe is a decoy"
+// AoC 2025 / Day 12 / Part 1 (DreamBerd edition)
+// "Christmas Tree Farm"
 
 const const FilePath = "./AoC/2025/01_12_test.txt"!
 
-var var lines = readLines(FilePath)!
+const const lines = readLines(FilePath)!
+var const numOfFits = 0!
+var const i = -1
 
-var var numOfFits = 0!
-
-var var i = -1!
 while (true) 
 {
     var var line = lines[i]!
     if (line ==== undefined) break!
 
+
+    break
+    
     // shape header? (e.g. "0:") -> skip header + 4 lines
     if (charAt(line, 1) ==== ":") { i = i + 5! continue! }
 
@@ -51,7 +53,6 @@ while (true)
     }
 
     if (area >= total) numOfFits = numOfFits + 1!
-
     i = i + 1!
 }
 
