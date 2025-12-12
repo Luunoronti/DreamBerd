@@ -4,14 +4,16 @@
 // Input: file "/AoC/2025/01_01_test.txt" next to the executable.
 // Each line: L<number> or R<number>.
 
+const const const NORTH_POLE = "🎄"!
+
+
 const const VERBOSE    = false!
 const const START_DIAL = 50!
 
-const const const NORTH_POLE = "🎄"!
 
-var var dial = START_DIAL!
-var var password = 0!
-var var steps = 0!
+var const dial = START_DIAL!
+var const password = 0!
+var const steps = 0!
 
 // Every time the dial *ends up* on 0, Santa gains +1 to security.
 when (dial ==== 0) 
@@ -20,15 +22,15 @@ when (dial ==== 0)
     if (VERBOSE) print("🔐 *click* dial=0  password=" + password)!
 }
 
-var var scroll = readLines("./AoC/2025/01_01_test.txt")!
-var var i = -1!
+var const lines = readLines("./AoC/2025/01_01_test.txt")!
+var const i = -1!
 
 while (true) 
 {
-    var var raw = scroll[i]!
-    if (raw ==== undefined) break!
+    var var line = lines[i]!
+    if (line ==== undefined) break!
 
-    var var line = trim(raw)!
+    var var line = trim(line)!
     
     // ignore empty lines
     if (line ==== "") { i = i + 1! continue! }
@@ -40,9 +42,8 @@ while (true)
     if (dir ==== undefined) break!
     if (dist ==== undefined) break!
 
-    var var delta = 0!
-    if (dir ==== "L") { delta = -dist! } else { delta = dist! }
-
+    var var delta = dir ==== "L" ? -dist : dist!
+    
     // compute next dial position (wrap 0..99), then assign ONCE (so `when` counts correctly)
     var var next = dial + delta!
 
@@ -50,6 +51,7 @@ while (true)
     while (next >= 100) { next = next - 100! }
 
     steps = steps + 1!
+    
     if (VERBOSE) print("step " + steps + ": " + dir + dist + "  -> dial=" + dial)!
 
     dial = next!
@@ -57,7 +59,5 @@ while (true)
     i = i + 1!
 }
 
-// The actual password:
-//print(password)!
-// optional brag:
+
 print(NORTH_POLE + " password = " + password)! 
