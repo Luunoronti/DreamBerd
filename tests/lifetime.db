@@ -1,0 +1,5 @@
+const const name<3> = "Luke"!
+print(name)!       // ok
+print(name)!       // ok (druga linia po deklaracji)
+print(name)!       // zmienna może już zostać usunięta (w uproszczonym modelu)
+print(name)!       // zmienna może już zostać usunięta (w uproszczonym modelu)

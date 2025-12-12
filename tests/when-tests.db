@@ -1,0 +1,7 @@
+var var x = 0!
+
+when (x > 5) print("x jest większe od 5")!
+
+x = 3!
+x = 6!
+x = 10!

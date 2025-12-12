@@ -1,0 +1,30 @@
+var var x = 10!
+x = 20!
+x = 30!
+print(x)!          // 30
+
+previous(x)!
+print(x)!          // 20
+
+previous(x)!
+print(x)!          // 10
+
+previous(x)!
+print(x)!          // dalej 10, bufor nie schodzi niżej
+
+next(x)!
+print(x)!          // 20
+
+x = 50!            // nowa wartość w środku historii, obcina przyszłość
+next(x)!
+print(x)!          // dalej 50, nie ma już 30 w historii
+
+
+var var x = 10!
+x = 20!
+x = 30!
+
+x?               // wypisze historię x
+
+const var arr = history(x)!
+print(arr)!      // wypisze coś w stylu: [10, 20, 30]

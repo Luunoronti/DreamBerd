@@ -1,0 +1,19 @@
+var var scores = [3, 2, 5]!
+
+print(scores[-1])! // 3
+print(scores[0])!  // 2
+print(scores[1])!  // 5
+
+scores[2.2] = 42!
+
+print(scores[2.2])!  // 42
+
+print(scores[0.0])!   // 2
+print(scores[0.5])!   // undefined (brak elementu o takim indeksie)
+
+var var a = [10, 20, 30]!
+print(a[-1] + a[1])!  // 10 + 30 = 40
+
+// tablice też między zmiennymi
+var const b = a!
+print(b[0])!
