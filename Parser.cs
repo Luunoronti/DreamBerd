@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace DreamberdInterpreter
@@ -82,37 +82,40 @@ namespace DreamberdInterpreter
             // Blok { ... }
             if (Match(TokenType.LeftBrace))
             {
-                return ParseBlockStatementAfterOpeningBrace();
+                int pos = Previous().Position;
+                return ParseBlockStatementAfterOpeningBrace(pos);
             }
 
-            // *** TU MUSI BYĆ OBSŁUGA IF ***
             if (Match(TokenType.If))
             {
-                return ParseIfStatement();
+                int pos = Previous().Position;
+                return ParseIfStatement(pos);
             }
 
             if (Match(TokenType.While))
             {
-                return ParseWhileStatement();
+                int pos = Previous().Position;
+                return ParseWhileStatement(pos);
             }
 
             if (Match(TokenType.Break))
             {
-                // break!
+                int pos = Previous().Position;
                 Consume(TokenType.Bang, "Expected '!' after 'break'.");
-                return new BreakStatement();
+                return new BreakStatement(pos);
             }
 
             if (Match(TokenType.Continue))
             {
-                // continue!
+                int pos = Previous().Position;
                 Consume(TokenType.Bang, "Expected '!' after 'continue'.");
-                return new ContinueStatement();
+                return new ContinueStatement(pos);
             }
 
             if (Match(TokenType.Return))
             {
-                return ParseReturnStatementAfterKeyword();
+                int pos = Previous().Position;
+                return ParseReturnStatementAfterKeyword(pos);
             }
 
             if (IsFunctionKeyword())
@@ -127,35 +130,39 @@ namespace DreamberdInterpreter
 
             if (Match(TokenType.Reverse))
             {
+                int pos = Previous().Position;
                 bool isDebug = ParseTerminatorIsDebug();
-                return new ReverseStatement(isDebug);
+                return new ReverseStatement(isDebug, pos);
             }
 
             if (Match(TokenType.Forward))
             {
+                int pos = Previous().Position;
                 bool isDebug = ParseTerminatorIsDebug();
-                return new ForwardStatement(isDebug);
+                return new ForwardStatement(isDebug, pos);
             }
 
             if (Match(TokenType.Delete))
             {
+                int pos = Previous().Position;
                 Expression target = ParseExpression();
                 bool isDebug = ParseTerminatorIsDebug();
-                return new DeleteStatement(target, isDebug);
+                return new DeleteStatement(target, isDebug, pos);
             }
 
             if (Match(TokenType.When))
             {
-                return ParseWhenStatement();
+                int pos = Previous().Position;
+                return ParseWhenStatement(pos);
             }
 
             // domyślnie: wyrażenie jako statement
             Expression expr = ParseExpression();
             bool debug = ParseTerminatorIsDebug();
-            return new ExpressionStatement(expr, debug);
+            return new ExpressionStatement(expr, debug, expr.Position);
         }
 
-        private Statement ParseBlockStatementAfterOpeningBrace()
+        private Statement ParseBlockStatementAfterOpeningBrace(int position)
         {
             var statements = new List<Statement>();
 
@@ -165,7 +172,7 @@ namespace DreamberdInterpreter
             }
 
             Consume(TokenType.RightBrace, "Expected '}' to close block.");
-            return new BlockStatement(statements);
+            return new BlockStatement(statements, position);
         }
 
         private bool ParseTerminatorIsDebug()
@@ -180,6 +187,7 @@ namespace DreamberdInterpreter
         private Statement ParseFunctionDeclaration()
         {
             // keyword: function / func / fun / fn / functi / f
+            int funcPos = Peek().Position;
             Advance(); // zjadamy keyword (Identifier)
 
             Token nameTok = Consume(TokenType.Identifier, "Expected function name.");
@@ -205,22 +213,24 @@ namespace DreamberdInterpreter
             Statement bodyStmt;
             if (Match(TokenType.LeftBrace))
             {
-                bodyStmt = ParseBlockStatementAfterOpeningBrace();
+                int blockPos = Previous().Position;
+                bodyStmt = ParseBlockStatementAfterOpeningBrace(blockPos);
             }
             else
             {
                 // Dla kompatybilności: function f(x) => expr!
                 // zachowuje się jak "return expr".
                 Expression bodyExpr = ParseExpression();
-                bodyStmt = new ReturnStatement(bodyExpr);
+                bodyStmt = new ReturnStatement(bodyExpr, bodyExpr.Position);
             }
 
             bool isDebug = ParseTerminatorIsDebug(); // na razie ignorujemy isDebug
+            _ = isDebug;
 
-            return new FunctionDeclarationStatement(name, parameters, bodyStmt);
+            return new FunctionDeclarationStatement(name, parameters, bodyStmt, funcPos);
         }
 
-        private Statement ParseReturnStatementAfterKeyword()
+        private Statement ParseReturnStatementAfterKeyword(int position)
         {
             // return!
             // return expr!
@@ -234,18 +244,20 @@ namespace DreamberdInterpreter
             bool isDebug = ParseTerminatorIsDebug(); // ignorujemy – return nie ma debug-print
             _ = isDebug;
 
-            return new ReturnStatement(expr);
+            return new ReturnStatement(expr, position);
         }
 
         private Statement ParseVariableDeclaration()
         {
+            int position = Peek().Position;
+
             TokenType firstKw;
             if (Match(TokenType.Const))
                 firstKw = TokenType.Const;
             else if (Match(TokenType.Var))
                 firstKw = TokenType.Var;
             else
-            throw new InterpreterException("Expected 'const' or 'var' at variable declaration.", Peek().Position);
+                throw new InterpreterException("Expected 'const' or 'var' at variable declaration.", Peek().Position);
 
             TokenType secondKw;
             if (Match(TokenType.Const))
@@ -253,7 +265,7 @@ namespace DreamberdInterpreter
             else if (Match(TokenType.Var))
                 secondKw = TokenType.Var;
             else
-            throw new InterpreterException("Variable declaration must use two keywords (e.g. 'const const', 'var var').", Peek().Position);
+                throw new InterpreterException("Variable declaration must use two keywords (e.g. 'const const', 'var var').", Peek().Position);
 
             DeclarationKind declKind = DeclarationKind.Normal;
             Mutability mutability;
@@ -286,10 +298,11 @@ namespace DreamberdInterpreter
             Consume(TokenType.Assign, "Expected '=' after variable name.");
             Expression initializer = ParseExpression();
             bool isDebug = ParseTerminatorIsDebug(); // ignored
+            _ = isDebug;
 
             int priority = 0;
 
-            return new VariableDeclarationStatement(declKind, mutability, name, lifetime, priority, initializer);
+            return new VariableDeclarationStatement(declKind, mutability, name, lifetime, priority, initializer, position);
         }
 
         private LifetimeSpecifier ParseLifetimeSpecifier()
@@ -319,7 +332,7 @@ namespace DreamberdInterpreter
                 return LifetimeSpecifier.Lines(value);
         }
 
-        private Statement ParseWhenStatement()
+        private Statement ParseWhenStatement(int position)
         {
             Consume(TokenType.LeftParen, "Expected '(' after 'when'.");
             Expression condition = ParseExpression();
@@ -331,19 +344,20 @@ namespace DreamberdInterpreter
             Statement bodyStmt;
             if (Match(TokenType.LeftBrace))
             {
-                bodyStmt = ParseBlockStatementAfterOpeningBrace();
+                int blockPos = Previous().Position;
+                bodyStmt = ParseBlockStatementAfterOpeningBrace(blockPos);
             }
             else
             {
                 Expression bodyExpr = ParseExpression();
                 bool isDebug = ParseTerminatorIsDebug();
-                bodyStmt = new ExpressionStatement(bodyExpr, isDebug);
+                bodyStmt = new ExpressionStatement(bodyExpr, isDebug, bodyExpr.Position);
             }
 
-            return new WhenStatement(condition, bodyStmt);
+            return new WhenStatement(condition, bodyStmt, position);
         }
 
-        private Statement ParseIfStatement()
+        private Statement ParseIfStatement(int position)
         {
             Consume(TokenType.LeftParen, "Expected '(' after 'if'.");
             Expression condition = ParseExpression();
@@ -358,10 +372,10 @@ namespace DreamberdInterpreter
                 elseStmt = ParseStatement();
             }
 
-            return new IfStatement(condition, thenStmt, elseStmt);
+            return new IfStatement(condition, thenStmt, elseStmt, position);
         }
 
-        private Statement ParseWhileStatement()
+        private Statement ParseWhileStatement(int position)
         {
             Consume(TokenType.LeftParen, "Expected '(' after 'while'.");
             Expression condition = ParseExpression();
@@ -369,7 +383,7 @@ namespace DreamberdInterpreter
 
             // podobnie jak w if: body może być pojedynczym statementem albo blokiem
             Statement body = ParseStatement();
-            return new WhileStatement(condition, body);
+            return new WhileStatement(condition, body, position);
         }
 
         private Expression ParseExpression() => ParseAssignment();
@@ -384,12 +398,12 @@ namespace DreamberdInterpreter
 
                 if (expr is IdentifierExpression ident)
                 {
-                    return new AssignmentExpression(ident.Name, value);
+                    return new AssignmentExpression(ident.Name, value, ident.Position);
                 }
 
                 if (expr is IndexExpression idx)
                 {
-                    return new IndexAssignmentExpression(idx.Target, idx.Index, value);
+                    return new IndexAssignmentExpression(idx.Target, idx.Index, value, idx.Position);
                 }
 
                 // Błąd najlepiej przypiąć do tokenu '=' (Previous()), bo to on zaczyna assignment.
@@ -400,6 +414,8 @@ namespace DreamberdInterpreter
             // cond ? t : f :: m ::: u
             if (Match(TokenType.Question))
             {
+                int qPos = Previous().Position;
+
                 Expression whenTrue = ParseAssignment();
 
                 Consume(TokenType.Colon, "Expected ':' after true branch of conditional expression.");
@@ -416,7 +432,7 @@ namespace DreamberdInterpreter
                 Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
                 Expression whenUndefined = ParseAssignment();
 
-                return new ConditionalExpression(expr, whenTrue, whenFalse, whenMaybe, whenUndefined);
+                return new ConditionalExpression(expr, whenTrue, whenFalse, whenMaybe, whenUndefined, qPos);
             }
 
             return expr;
@@ -430,18 +446,21 @@ namespace DreamberdInterpreter
             {
                 if (Match(TokenType.Equal))
                 {
+                    int pos = Previous().Position;
                     Expression right = ParseComparison();
-                    expr = new BinaryExpression(expr, BinaryOperator.Equal, right);
+                    expr = new BinaryExpression(expr, BinaryOperator.Equal, right, pos);
                 }
                 else if (Match(TokenType.EqualEqual))
                 {
+                    int pos = Previous().Position;
                     Expression right = ParseComparison();
-                    expr = new BinaryExpression(expr, BinaryOperator.DoubleEqual, right);
+                    expr = new BinaryExpression(expr, BinaryOperator.DoubleEqual, right, pos);
                 }
                 else if (Match(TokenType.EqualEqualEqual))
                 {
+                    int pos = Previous().Position;
                     Expression right = ParseComparison();
-                    expr = new BinaryExpression(expr, BinaryOperator.TripleEqual, right);
+                    expr = new BinaryExpression(expr, BinaryOperator.TripleEqual, right, pos);
                 }
                 else
                 {
@@ -460,23 +479,27 @@ namespace DreamberdInterpreter
             {
                 if (Match(TokenType.Less))
                 {
+                    int pos = Previous().Position;
                     Expression right = ParseTerm();
-                    expr = new BinaryExpression(expr, BinaryOperator.Less, right);
+                    expr = new BinaryExpression(expr, BinaryOperator.Less, right, pos);
                 }
                 else if (Match(TokenType.LessEqual))
                 {
+                    int pos = Previous().Position;
                     Expression right = ParseTerm();
-                    expr = new BinaryExpression(expr, BinaryOperator.LessOrEqual, right);
+                    expr = new BinaryExpression(expr, BinaryOperator.LessOrEqual, right, pos);
                 }
                 else if (Match(TokenType.Greater))
                 {
+                    int pos = Previous().Position;
                     Expression right = ParseTerm();
-                    expr = new BinaryExpression(expr, BinaryOperator.Greater, right);
+                    expr = new BinaryExpression(expr, BinaryOperator.Greater, right, pos);
                 }
                 else if (Match(TokenType.GreaterEqual))
                 {
+                    int pos = Previous().Position;
                     Expression right = ParseTerm();
-                    expr = new BinaryExpression(expr, BinaryOperator.GreaterOrEqual, right);
+                    expr = new BinaryExpression(expr, BinaryOperator.GreaterOrEqual, right, pos);
                 }
                 else
                 {
@@ -495,13 +518,15 @@ namespace DreamberdInterpreter
             {
                 if (Match(TokenType.Plus))
                 {
+                    int pos = Previous().Position;
                     Expression right = ParseFactor();
-                    expr = new BinaryExpression(expr, BinaryOperator.Add, right);
+                    expr = new BinaryExpression(expr, BinaryOperator.Add, right, pos);
                 }
                 else if (Match(TokenType.Minus))
                 {
+                    int pos = Previous().Position;
                     Expression right = ParseFactor();
-                    expr = new BinaryExpression(expr, BinaryOperator.Subtract, right);
+                    expr = new BinaryExpression(expr, BinaryOperator.Subtract, right, pos);
                 }
                 else
                 {
@@ -520,13 +545,15 @@ namespace DreamberdInterpreter
             {
                 if (Match(TokenType.Star))
                 {
+                    int pos = Previous().Position;
                     Expression right = ParseUnary();
-                    expr = new BinaryExpression(expr, BinaryOperator.Multiply, right);
+                    expr = new BinaryExpression(expr, BinaryOperator.Multiply, right, pos);
                 }
                 else if (Match(TokenType.Slash))
                 {
+                    int pos = Previous().Position;
                     Expression right = ParseUnary();
-                    expr = new BinaryExpression(expr, BinaryOperator.Divide, right);
+                    expr = new BinaryExpression(expr, BinaryOperator.Divide, right, pos);
                 }
                 else
                 {
@@ -541,8 +568,9 @@ namespace DreamberdInterpreter
         {
             if (Match(TokenType.Minus))
             {
+                int pos = Previous().Position;
                 Expression right = ParseUnary();
-                return new UnaryExpression(UnaryOperator.Negate, right);
+                return new UnaryExpression(UnaryOperator.Negate, right, pos);
             }
 
             return ParsePostfix();
@@ -565,13 +593,13 @@ namespace DreamberdInterpreter
                         } while (Match(TokenType.Comma));
                     }
                     Consume(TokenType.RightParen, "Expected ')' after arguments.");
-                    expr = new CallExpression(expr, args);
+                    expr = new CallExpression(expr, args, expr.Position);
                 }
                 else if (Match(TokenType.LeftBracket))
                 {
                     Expression index = ParseExpression();
                     Consume(TokenType.RightBracket, "Expected ']' after index.");
-                    expr = new IndexExpression(expr, index);
+                    expr = new IndexExpression(expr, index, expr.Position);
                 }
                 else
                 {
@@ -586,33 +614,37 @@ namespace DreamberdInterpreter
         {
             if (Match(TokenType.Number))
             {
-                double value = (double)(Previous().Literal ?? 0.0);
-                return new LiteralExpression(Value.FromNumber(value));
+                var t = Previous();
+                double value = (double)(t.Literal ?? 0.0);
+                return new LiteralExpression(Value.FromNumber(value), t.Position);
             }
 
             if (Match(TokenType.String))
             {
-                string text = Previous().Literal as string ?? string.Empty;
-                return new LiteralExpression(Value.FromString(text));
+                var t = Previous();
+                string text = t.Literal as string ?? string.Empty;
+                return new LiteralExpression(Value.FromString(text), t.Position);
             }
 
             if (Match(TokenType.Identifier))
             {
-                string name = Previous().Lexeme;
+                var t = Previous();
+                string name = t.Lexeme;
+                int pos = t.Position;
 
                 // Booleany i undefined jako literały Dreamberda
                 switch (name)
                 {
                     case "true":
-                        return new LiteralExpression(Value.FromBoolean(true));
+                        return new LiteralExpression(Value.FromBoolean(true), pos);
                     case "false":
-                        return new LiteralExpression(Value.FromBoolean(false));
+                        return new LiteralExpression(Value.FromBoolean(false), pos);
                     case "maybe":
-                        return new LiteralExpression(Value.Maybe);
+                        return new LiteralExpression(Value.Maybe, pos);
                     case "undefined":
-                        return new LiteralExpression(Value.Undefined);
+                        return new LiteralExpression(Value.Undefined, pos);
                     default:
-                        return new IdentifierExpression(name);
+                        return new IdentifierExpression(name, pos);
                 }
             }
 
@@ -625,6 +657,8 @@ namespace DreamberdInterpreter
 
             if (Match(TokenType.LeftBracket))
             {
+                int pos = Previous().Position;
+
                 var elements = new List<Expression>();
                 if (!Check(TokenType.RightBracket))
                 {
@@ -634,7 +668,7 @@ namespace DreamberdInterpreter
                     } while (Match(TokenType.Comma));
                 }
                 Consume(TokenType.RightBracket, "Expected ']' after array literal.");
-                return new ArrayLiteralExpression(elements);
+                return new ArrayLiteralExpression(elements, pos);
             }
 
             throw new InterpreterException($"Unexpected token '{Peek().Lexeme}'.", Peek().Position);

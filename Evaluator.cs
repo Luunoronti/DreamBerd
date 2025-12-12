@@ -252,7 +252,7 @@ namespace DreamberdInterpreter
                 case DeleteStatement ds:
                     {
                         Value value = EvaluateExpression(ds.Target);
-                        MarkDeleted(value);
+                        MarkDeleted(value, ds.Position);
                         if (ds.IsDebug)
                         {
                             Console.WriteLine("[DEBUG] delete {0}", value);
@@ -270,7 +270,7 @@ namespace DreamberdInterpreter
                     {
                         // return jest dozwolony tylko wewnątrz wywołania funkcji.
                         if (_callStack.Count == 0)
-                            throw new InterpreterException("return can only be used inside a function.");
+                            throw new InterpreterException("return can only be used inside a function.", rs.Position);
 
                         Value value = rs.Expression != null
                             ? EvaluateExpression(rs.Expression)
@@ -331,17 +331,17 @@ namespace DreamberdInterpreter
                         return Value.Null;
                     }
 
-                case BreakStatement:
+                case BreakStatement bs:
                     {
                         if (_loopDepth <= 0)
-                            throw new InterpreterException("break can only be used inside a while loop.");
+                            throw new InterpreterException("break can only be used inside a while loop.", bs.Position);
                         throw new BreakSignal();
                     }
 
-                case ContinueStatement:
+                case ContinueStatement cs:
                     {
                         if (_loopDepth <= 0)
-                            throw new InterpreterException("continue can only be used inside a while loop.");
+                            throw new InterpreterException("continue can only be used inside a while loop.", cs.Position);
                         throw new ContinueSignal();
                     }
 
@@ -350,7 +350,7 @@ namespace DreamberdInterpreter
                     return Value.Null;
 
                 default:
-                    throw new InterpreterException($"Unknown statement type: {statement.GetType().Name}.");
+                    throw new InterpreterException($"Unknown statement type: {statement.GetType().Name}.", statement.Position);
             }
         }
 
@@ -421,10 +421,10 @@ namespace DreamberdInterpreter
                     break;
 
                 default:
-                    throw new InterpreterException($"Unknown expression type: {expression.GetType().Name}.");
+                    throw new InterpreterException($"Unknown expression type: {expression.GetType().Name}.", expression.Position);
             }
 
-            return CheckDeleted(result);
+            return CheckDeleted(result, expression.Position);
         }
 
         private Value EvaluateIdentifier(IdentifierExpression ident)
@@ -449,14 +449,28 @@ namespace DreamberdInterpreter
             return Value.FromString(ident.Name);
         }
 
+        private static double ToNumberAt(Value value, int position)
+        {
+            try
+            {
+                return value.ToNumber();
+            }
+            catch (InterpreterException ex) when (ex.Position is null)
+            {
+                // Value.ToNumber() nie ma informacji o pozycji, więc podpinamy ją tutaj.
+                throw new InterpreterException(ex.Message, position);
+            }
+        }
+
+
         private Value EvaluateUnary(UnaryExpression unary)
         {
             Value operand = EvaluateExpression(unary.Operand);
 
             return unary.Operator switch
             {
-                UnaryOperator.Negate => Value.FromNumber(-operand.ToNumber()),
-                _ => throw new InterpreterException($"Unsupported unary operator {unary.Operator}.")
+                UnaryOperator.Negate => Value.FromNumber(-ToNumberAt(operand, unary.Operand.Position)),
+                _ => throw new InterpreterException($"Unsupported unary operator {unary.Operator}.", unary.Position)
             };
         }
 
@@ -465,21 +479,44 @@ namespace DreamberdInterpreter
             Value left = EvaluateExpression(binary.Left);
             Value right = EvaluateExpression(binary.Right);
 
-            return binary.Operator switch
+            switch (binary.Operator)
             {
-                BinaryOperator.Add => EvaluateAdd(left, right),
-                BinaryOperator.Subtract => Value.FromNumber(left.ToNumber() - right.ToNumber()),
-                BinaryOperator.Multiply => Value.FromNumber(left.ToNumber() * right.ToNumber()),
-                BinaryOperator.Divide => EvaluateDivide(left, right),
-                BinaryOperator.Equal => Value.FromBoolean(left.VeryLooseEquals(right)),
-                BinaryOperator.DoubleEqual => Value.FromBoolean(left.LooseEquals(right)),
-                BinaryOperator.TripleEqual => Value.FromBoolean(left.StrictEquals(right)),
-                BinaryOperator.Less => Value.FromBoolean(left.ToNumber() < right.ToNumber()),
-                BinaryOperator.Greater => Value.FromBoolean(left.ToNumber() > right.ToNumber()),
-                BinaryOperator.LessOrEqual => Value.FromBoolean(left.ToNumber() <= right.ToNumber()),
-                BinaryOperator.GreaterOrEqual => Value.FromBoolean(left.ToNumber() >= right.ToNumber()),
-                _ => throw new InterpreterException($"Unsupported binary operator {binary.Operator}.")
-            };
+                case BinaryOperator.Add:
+                    return EvaluateAdd(left, right);
+
+                case BinaryOperator.Subtract:
+                    return Value.FromNumber(ToNumberAt(left, binary.Left.Position) - ToNumberAt(right, binary.Right.Position));
+
+                case BinaryOperator.Multiply:
+                    return Value.FromNumber(ToNumberAt(left, binary.Left.Position) * ToNumberAt(right, binary.Right.Position));
+
+                case BinaryOperator.Divide:
+                    return EvaluateDivide(left, right, binary.Left.Position, binary.Right.Position);
+
+                case BinaryOperator.Equal:
+                    return Value.FromBoolean(left.VeryLooseEquals(right));
+
+                case BinaryOperator.DoubleEqual:
+                    return Value.FromBoolean(left.LooseEquals(right));
+
+                case BinaryOperator.TripleEqual:
+                    return Value.FromBoolean(left.StrictEquals(right));
+
+                case BinaryOperator.Less:
+                    return Value.FromBoolean(ToNumberAt(left, binary.Left.Position) < ToNumberAt(right, binary.Right.Position));
+
+                case BinaryOperator.Greater:
+                    return Value.FromBoolean(ToNumberAt(left, binary.Left.Position) > ToNumberAt(right, binary.Right.Position));
+
+                case BinaryOperator.LessOrEqual:
+                    return Value.FromBoolean(ToNumberAt(left, binary.Left.Position) <= ToNumberAt(right, binary.Right.Position));
+
+                case BinaryOperator.GreaterOrEqual:
+                    return Value.FromBoolean(ToNumberAt(left, binary.Left.Position) >= ToNumberAt(right, binary.Right.Position));
+
+                default:
+                    throw new InterpreterException($"Unsupported binary operator {binary.Operator}.", binary.Position);
+            }
         }
 
         private static Value EvaluateAdd(Value left, Value right)
@@ -492,15 +529,15 @@ namespace DreamberdInterpreter
             return Value.FromString(left.ToString() + right.ToString());
         }
 
-        private static Value EvaluateDivide(Value left, Value right)
+        private Value EvaluateDivide(Value left, Value right, int leftPosition, int rightPosition)
         {
-            double divisor = right.ToNumber();
+            double divisor = ToNumberAt(right, rightPosition);
             if (Math.Abs(divisor) < double.Epsilon)
             {
                 return Value.Undefined;
             }
 
-            return Value.FromNumber(left.ToNumber() / divisor);
+            return Value.FromNumber(ToNumberAt(left, leftPosition) / divisor);
         }
 
         private Value EvaluateConditional(ConditionalExpression condExpr)
@@ -538,7 +575,7 @@ namespace DreamberdInterpreter
         private Value EvaluateAssignment(AssignmentExpression assign)
         {
             if (_constStore.TryGet(assign.Name, out _))
-                throw new InterpreterException($"Cannot assign to const const const variable '{assign.Name}'.");
+                throw new InterpreterException($"Cannot assign to const const const variable '{assign.Name}'.", assign.Position);
 
             Value value = EvaluateExpression(assign.ValueExpression);
 
@@ -564,10 +601,10 @@ namespace DreamberdInterpreter
             Value targetVal = EvaluateExpression(ia.Target);
 
             if (targetVal.Kind != ValueKind.Array || targetVal.Array == null)
-                throw new InterpreterException("Index assignment is only supported on arrays.");
+                throw new InterpreterException("Index assignment is only supported on arrays.", ia.Position);
 
             Value indexVal = EvaluateExpression(ia.Index);
-            double index = indexVal.ToNumber();
+            double index = ToNumberAt(indexVal, ia.Index.Position);
 
             var dict = new Dictionary<double, Value>(targetVal.Array);
             Value newValue = EvaluateExpression(ia.ValueExpression);
@@ -648,7 +685,7 @@ namespace DreamberdInterpreter
         private Value EvaluatePreviousCall(CallExpression call)
         {
             if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
-                throw new InterpreterException("previous(x) expects a single identifier argument.");
+                throw new InterpreterException("previous(x) expects a single identifier argument.", call.Position);
 
             if (!_variables.TryPrevious(id.Name, out var newVal, out var changed))
                 return Value.Undefined;
@@ -662,7 +699,7 @@ namespace DreamberdInterpreter
         private Value EvaluateNextCall(CallExpression call)
         {
             if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
-                throw new InterpreterException("next(x) expects a single identifier argument.");
+                throw new InterpreterException("next(x) expects a single identifier argument.", call.Position);
 
             if (!_variables.TryNext(id.Name, out var newVal, out var changed))
                 return Value.Undefined;
@@ -676,7 +713,7 @@ namespace DreamberdInterpreter
         private Value EvaluateHistoryCall(CallExpression call)
         {
             if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
-                throw new InterpreterException("history(x) expects a single identifier argument.");
+                throw new InterpreterException("history(x) expects a single identifier argument.", call.Position);
 
             if (!_variables.TryGetHistory(id.Name, out var values, out var currentIndex) ||
                 values.Count == 0)
@@ -753,10 +790,10 @@ namespace DreamberdInterpreter
             Value targetVal = EvaluateExpression(indexExpr.Target);
 
             if (targetVal.Kind != ValueKind.Array || targetVal.Array == null)
-                throw new InterpreterException("Indexing is only supported on arrays.");
+                throw new InterpreterException("Indexing is only supported on arrays.", indexExpr.Position);
 
             Value indexVal = EvaluateExpression(indexExpr.Index);
-            double index = indexVal.ToNumber();
+            double index = ToNumberAt(indexVal, indexExpr.Index.Position);
 
             if (!targetVal.Array.TryGetValue(index, out var element))
             {
@@ -766,7 +803,7 @@ namespace DreamberdInterpreter
             return element;
         }
 
-        private void MarkDeleted(Value value)
+        private void MarkDeleted(Value value, int position)
         {
             switch (value.Kind)
             {
@@ -784,27 +821,27 @@ namespace DreamberdInterpreter
                     break;
 
                 default:
-                    throw new InterpreterException("delete only works with primitive values (numbers, strings, booleans).");
+                    throw new InterpreterException("delete only works with primitive values (numbers, strings, booleans).", position);
             }
         }
 
-        private Value CheckDeleted(Value value)
+        private Value CheckDeleted(Value value, int position)
         {
             switch (value.Kind)
             {
                 case ValueKind.Number:
                     if (_deletedNumbers.Contains(value.Number))
-                        throw new InterpreterException($"Value '{value}' has been deleted.");
+                        throw new InterpreterException($"Value '{value}' has been deleted.", position);
                     break;
 
                 case ValueKind.String:
                     if (value.String != null && _deletedStrings.Contains(value.String))
-                        throw new InterpreterException($"Value '{value}' has been deleted.");
+                        throw new InterpreterException($"Value '{value}' has been deleted.", position);
                     break;
 
                 case ValueKind.Boolean:
                     if (_deletedBooleans.Contains(value.Bool))
-                        throw new InterpreterException($"Value '{value}' has been deleted.");
+                        throw new InterpreterException($"Value '{value}' has been deleted.", position);
                     break;
             }
 
