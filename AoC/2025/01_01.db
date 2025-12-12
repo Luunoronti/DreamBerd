@@ -1,0 +1,56 @@
+// AoC 2025 / Day 01 / Part 1 (DreamBerd edition)
+// "The safe is a decoy"
+
+// Input: file "input.txt" next to the executable.
+// Each line: L<number> or R<number>.
+
+const const const NORTH_POLE = "🎄"!
+
+var var dial = 50!
+var var password = 0!
+
+// Every time the dial *ends up* on 0, Santa gains +1 security theatre.
+when (dial ==== 0) print("Dial is passing 0")!
+
+// password = password + 1!
+
+var var scroll = readLines("./AoC/2025/01_01_test.txt")!
+var var i = -1!
+
+while (true) {
+    var var raw = scroll[i]!
+    if (raw ==== undefined) break!
+
+    var var line = trim(raw)!
+    
+    // ignore empty lines
+    if (line ==== "") { i = i + 1! continue! }
+
+    var var dir = charAt(line, 0)!
+    var var dist = toNumber(slice(line, 1))!
+
+    // if the scroll is cursed, stop before we summon undefined demons
+    if (dir ==== undefined) break!
+    if (dist ==== undefined) break!
+
+    var var delta = 0!
+    if (dir ==== "L") { delta = -dist! } else { delta = dist! }
+
+    // compute next dial position (wrap 0..99), then assign ONCE (so `when` counts correctly)
+    var var next = dial + delta!
+
+    while (next < 0)  { next = next + 100! }
+    while (next >= 100) { next = next - 100! }
+
+    dial = next!
+
+    // my when() does not work as intended :(
+        
+    if( dial ==== 0) password = password + 1!
+    i = i + 1!
+}
+
+// The actual password:
+print(password)!
+// optional brag:
+print(NORTH_POLE + " password = " + password)! 

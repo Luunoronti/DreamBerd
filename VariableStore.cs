@@ -17,10 +17,12 @@ namespace DreamberdInterpreter
             {
                 get;
             }
+
             public int DeclarationIndex
             {
                 get;
             }
+
             public DateTime CreatedAtUtc
             {
                 get;
@@ -38,22 +40,35 @@ namespace DreamberdInterpreter
         {
             public Mutability Mutability = Mutability.VarVar;
             public int Priority;
+            public int DeclaredAtStatementIndex;
             public Value CurrentValue;
             public VariableHistory History = new();
             public LifetimeInfo? Lifetime;
         }
 
-        private readonly List<Dictionary<string, Entry>> _scopes =
+        /// <summary>
+        /// W obrębie jednego scope'a możemy mieć wiele deklaracji tej samej zmiennej (overloading).
+        /// Aktywna deklaracja wybierana jest wg:
+        /// 1) najwyższy Priority (liczba '!'),
+        /// 2) jeśli remis: najbardziej świeża deklaracja (DeclaredAtStatementIndex),
+        /// 3) jeśli nadal remis: ostatnia na liście.
+        /// </summary>
+        private sealed class OverloadSet
+        {
+            public List<Entry> Entries = new();
+        }
+
+        private readonly List<Dictionary<string, OverloadSet>> _scopes =
             new()
             {
-                new Dictionary<string, Entry>(StringComparer.Ordinal)
+                new Dictionary<string, OverloadSet>(StringComparer.Ordinal)
             };
 
-        private Dictionary<string, Entry> CurrentScope => _scopes[_scopes.Count - 1];
+        private Dictionary<string, OverloadSet> CurrentScope => _scopes[_scopes.Count - 1];
 
         public void PushScope()
         {
-            _scopes.Add(new Dictionary<string, Entry>(StringComparer.Ordinal));
+            _scopes.Add(new Dictionary<string, OverloadSet>(StringComparer.Ordinal));
         }
 
         public void PopScope()
@@ -64,26 +79,61 @@ namespace DreamberdInterpreter
             _scopes.RemoveAt(_scopes.Count - 1);
         }
 
-        private bool TryFindEntry(string name, out Entry? entry, out Dictionary<string, Entry>? scope)
+        private bool TryFindSet(string name, out OverloadSet set, out Dictionary<string, OverloadSet> scope)
         {
             for (int i = _scopes.Count - 1; i >= 0; i--)
             {
-                var dict = _scopes[i];
-                if (dict.TryGetValue(name, out var found))
+                var sc = _scopes[i];
+                if (sc.TryGetValue(name, out var found))
                 {
-                    entry = found;
-                    scope = dict;
+                    set = found;
+                    scope = sc;
                     return true;
                 }
             }
 
-            entry = null;
-            scope = null;
+            set = null!;
+            scope = null!;
             return false;
         }
 
-        private const int MaxHistory = 100;
-public void Declare(
+        private static Entry? SelectActive(OverloadSet set)
+        {
+            if (set.Entries.Count == 0)
+                return null;
+
+            Entry best = set.Entries[0];
+
+            for (int i = 1; i < set.Entries.Count; i++)
+            {
+                var e = set.Entries[i];
+
+                if (e.Priority > best.Priority)
+                {
+                    best = e;
+                    continue;
+                }
+
+                if (e.Priority == best.Priority)
+                {
+                    if (e.DeclaredAtStatementIndex > best.DeclaredAtStatementIndex)
+                    {
+                        best = e;
+                        continue;
+                    }
+
+                    if (e.DeclaredAtStatementIndex == best.DeclaredAtStatementIndex)
+                    {
+                        // w praktyce to się raczej nie zdarzy, ale dla pewności:
+                        best = e;
+                    }
+                }
+            }
+
+            return best;
+        }
+
+        public void Declare(
             string name,
             Mutability mutability,
             Value initialValue,
@@ -92,24 +142,24 @@ public void Declare(
             int declarationIndex)
         {
             if (name == null) throw new ArgumentNullException(nameof(name));
+            if (priority <= 0) priority = 1; // sanity: pojedyncze '!' == 1
 
             // Deklaracje trafiają do bieżącego scope'a (blokowego).
-            // Pozwalamy na "shadowing" nazw z parent scope'ów.
+            // Pozwalamy na shadowing nazw z parent scope'ów.
             var scope = CurrentScope;
 
-            if (scope.TryGetValue(name, out var existing))
+            if (!scope.TryGetValue(name, out var set))
             {
-                // Priorytet działa tylko w obrębie tego samego scope'a.
-                if (priority < existing.Priority)
-                    return;
+                set = new OverloadSet();
+                scope[name] = set;
             }
 
             var entry = new Entry
             {
                 Mutability = mutability,
                 Priority = priority,
-                CurrentValue = initialValue,
-                History = new VariableHistory()
+                DeclaredAtStatementIndex = declarationIndex,
+                CurrentValue = initialValue
             };
 
             entry.History.Values.Add(initialValue);
@@ -120,38 +170,32 @@ public void Declare(
                 entry.Lifetime = new LifetimeInfo(lifetime, declarationIndex, DateTime.UtcNow);
             }
 
-            scope[name] = entry;
+            set.Entries.Add(entry);
         }
 
-
-	public bool TryGet(string name, out Value value)
+        public bool TryGet(string name, out Value value)
         {
-            if (TryFindEntry(name, out var entry, out _))
-            {
-                value = entry!.CurrentValue;
-                return true;
-            }
-
             value = default;
-            return false;
+
+            if (!TryFindSet(name, out var set, out _))
+                return false;
+
+            var active = SelectActive(set);
+            if (active == null)
+                return false;
+
+            value = active.CurrentValue;
+            return true;
         }
 
-
-public Value Get(string name)
+        public void Assign(string name, Value newValue, int statementIndex)
         {
-            if (TryFindEntry(name, out var entry, out _))
-                return entry!.CurrentValue;
-
-            throw new InterpreterException($"Variable '{name}' is not defined.");
-        }
-
-
-public void Assign(string name, Value newValue, int statementIndex)
-        {
-            if (!TryFindEntry(name, out var entry, out _) || entry == null)
+            if (!TryFindSet(name, out var set, out _))
                 throw new InterpreterException($"Variable '{name}' is not defined.");
 
-            //entry = entry!;
+            var entry = SelectActive(set);
+            if (entry == null)
+                throw new InterpreterException($"Variable '{name}' is not defined.");
 
             if (entry.Mutability == Mutability.ConstConst ||
                 entry.Mutability == Mutability.ConstVar)
@@ -163,97 +207,119 @@ public void Assign(string name, Value newValue, int statementIndex)
             UpdateHistory(entry, newValue);
         }
 
-
-public void Delete(string name)
+        public void Delete(string name)
         {
-            if (TryFindEntry(name, out _, out var scope))
-            {
-                scope!.Remove(name);
-            }
-        }
-
-
-public void ExpireLifetimes(int currentStatementIndex, DateTime nowUtc)
-        {
-            var toRemove = new List<(Dictionary<string, Entry> Scope, string Name)>();
-
-            // Sprawdzamy wszystkie scope'y (od globalnego po najgłębszy).
-            foreach (var scope in _scopes)
-            {
-                foreach (var pair in scope)
-                {
-                    string name = pair.Key;
-                    var entry = pair.Value;
-
-                    if (!entry.Lifetime.HasValue)
-                        continue;
-
-                    var info = entry.Lifetime.Value;
-                    var lifetime = info.Lifetime;
-
-                    switch (lifetime.Kind)
-                    {
-                        case LifetimeKind.None:
-                            break;
-
-                        case LifetimeKind.Infinity:
-                            break;
-
-                        // <N> (linie / statementy)
-                        case LifetimeKind.Lines:
-                            {
-                                int age = currentStatementIndex - info.DeclarationIndex;
-                                if (age >= lifetime.Value)
-                                    toRemove.Add((scope, name));
-                                break;
-                            }
-
-                        // <Ns> (czas)
-                        case LifetimeKind.Seconds:
-                            {
-                                var age = nowUtc - info.CreatedAtUtc;
-                                if (age.TotalSeconds >= lifetime.Value)
-                                    toRemove.Add((scope, name));
-                                break;
-                            }
-
-                        default:
-                            throw new InterpreterException($"Unknown lifetime kind: {lifetime.Kind}");
-                    }
-                }
-            }
-
-            foreach (var (scope, name) in toRemove)
+            if (TryFindSet(name, out _, out var scope))
             {
                 scope.Remove(name);
             }
         }
 
-
-public bool TryGetHistory(string name, out IReadOnlyList<Value> values, out int currentIndex)
+        public void ExpireLifetimes(int currentStatementIndex, DateTime nowUtc)
         {
-            if (TryFindEntry(name, out var entry, out _))
+            // Usuwamy wygasłe overloady, a jeśli set jest pusty, usuwamy całą nazwę.
+            foreach (var scope in _scopes)
             {
-                values = entry!.History.Values;
-                currentIndex = entry!.History.Index;
-                return true;
-            }
+                // Musimy zbierać klucze do usunięcia, bo nie wolno modyfikować dict podczas foreach.
+                List<string>? namesToRemove = null;
 
-            values = Array.Empty<Value>();
-            currentIndex = -1;
-            return false;
+                foreach (var pair in scope)
+                {
+                    var set = pair.Value;
+                    if (set.Entries.Count == 0)
+                        continue;
+
+                    // Czyścimy z tyłu (bezpiecznie usuwać elementy listy).
+                    for (int i = set.Entries.Count - 1; i >= 0; i--)
+                    {
+                        var entry = set.Entries[i];
+                        if (!entry.Lifetime.HasValue)
+                            continue;
+
+                        var info = entry.Lifetime.Value;
+                        var lifetime = info.Lifetime;
+
+                        bool expired = false;
+
+                        switch (lifetime.Kind)
+                        {
+                            case LifetimeKind.None:
+                                expired = false;
+                                break;
+
+                            case LifetimeKind.Infinity:
+                                expired = false;
+                                break;
+
+                            case LifetimeKind.Lines:
+                                {
+                                    double age = currentStatementIndex - info.DeclarationIndex;
+                                    if (age >= lifetime.Value)
+                                        expired = true;
+                                    break;
+                                }
+
+                            case LifetimeKind.Seconds:
+                                {
+                                    var age = nowUtc - info.CreatedAtUtc;
+                                    if (age >= TimeSpan.FromSeconds(lifetime.Value))
+                                        expired = true;
+                                    break;
+                                }
+
+                            default:
+                                throw new InterpreterException($"Unknown lifetime kind: {lifetime.Kind}");
+                        }
+
+                        if (expired)
+                        {
+                            set.Entries.RemoveAt(i);
+                        }
+                    }
+
+                    if (set.Entries.Count == 0)
+                    {
+                        namesToRemove ??= new List<string>();
+                        namesToRemove.Add(pair.Key);
+                    }
+                }
+
+                if (namesToRemove != null)
+                {
+                    foreach (var name in namesToRemove)
+                        scope.Remove(name);
+                }
+            }
         }
 
+        public bool TryGetHistory(string name, out List<Value> values, out int currentIndex)
+        {
+            values = new List<Value>();
+            currentIndex = 0;
 
-public bool TryPrevious(string name, out Value newValue, out bool changed)
+            if (!TryFindSet(name, out var set, out _))
+                return false;
+
+            var entry = SelectActive(set);
+            if (entry == null)
+                return false;
+
+            values = entry.History.Values;
+            currentIndex = entry.History.Index;
+            return true;
+        }
+
+        public bool TryPrevious(string name, out Value newValue, out bool changed)
         {
             newValue = default;
             changed = false;
 
-            if (!TryFindEntry(name, out var entry, out _) || entry == null)
+            if (!TryFindSet(name, out var set, out _))
                 return false;
 
-            //entry = entry!;
+            var entry = SelectActive(set);
+            if (entry == null)
+                return false;
 
             var hist = entry.History;
             if (hist.Values.Count == 0)
@@ -263,27 +329,32 @@ public bool TryPrevious(string name, out Value newValue, out bool changed)
             {
                 newValue = hist.Values[0];
                 changed = false;
-                entry.CurrentValue = newValue;
                 return true;
             }
 
             hist.Index--;
             newValue = hist.Values[hist.Index];
-            changed = true;
-            entry.CurrentValue = newValue;
+
+            if (!entry.CurrentValue.StrictEquals(newValue))
+            {
+                entry.CurrentValue = newValue;
+                changed = true;
+            }
+
             return true;
         }
 
-
-public bool TryNext(string name, out Value newValue, out bool changed)
+        public bool TryNext(string name, out Value newValue, out bool changed)
         {
             newValue = default;
             changed = false;
 
-            if (!TryFindEntry(name, out var entry, out _) || entry == null)
+            if (!TryFindSet(name, out var set, out _))
                 return false;
 
-            //entry = entry!;
+            var entry = SelectActive(set);
+            if (entry == null)
+                return false;
 
             var hist = entry.History;
             if (hist.Values.Count == 0)
@@ -293,22 +364,24 @@ public bool TryNext(string name, out Value newValue, out bool changed)
             {
                 newValue = hist.Values[hist.Values.Count - 1];
                 changed = false;
-                entry.CurrentValue = newValue;
                 return true;
             }
 
             hist.Index++;
             newValue = hist.Values[hist.Index];
-            changed = true;
-            entry.CurrentValue = newValue;
+
+            if (!entry.CurrentValue.StrictEquals(newValue))
+            {
+                entry.CurrentValue = newValue;
+                changed = true;
+            }
+
             return true;
         }
 
-
-private void UpdateHistory(Entry entry, Value newValue)
+        private static void UpdateHistory(Entry entry, Value newValue)
         {
-            var hist = entry.History ??= new VariableHistory();
-
+            var hist = entry.History;
             if (hist.Values.Count == 0)
             {
                 hist.Values.Add(newValue);
@@ -328,13 +401,6 @@ private void UpdateHistory(Entry entry, Value newValue)
 
             hist.Values.Add(newValue);
             hist.Index = hist.Values.Count - 1;
-
-            if (hist.Values.Count > MaxHistory)
-            {
-                hist.Values.RemoveAt(0);
-                hist.Index--;
-                if (hist.Index < 0) hist.Index = 0;
-            }
         }
     }
 }

@@ -1,0 +1,71 @@
+// test_when.db
+// Minimal regression tests for `when(...)`
+// Expectations:
+// - fires when condition becomes truthy after a mutation
+// - does NOT recurse infinitely when the `when` body mutates variables
+// - fires on declaration (not only assignment), including inside block scopes
+
+var var total = 0!
+var var passed = 0!
+var var failed = 0!
+
+function pass(name) => {
+    passed = passed + 1!
+    print("PASS: " + name)!
+}!
+
+function fail(name, got, expected) => {
+    failed = failed + 1!
+    print("FAIL: " + name)!
+    print("  got: " + got)!
+    print("  exp: " + expected)!
+}!
+
+function assertEq(name, got, expected) => {
+    total = total + 1!
+    if (got ==== expected) { pass(name)! return! }
+    fail(name, got, expected)!
+}!
+
+print("=== WHEN tests ===")!
+
+// 1) Basic: `when` fires per mutation once, even if the body mutates a different variable.
+var var x = 0!
+var var hits = 0!
+when (x > 2) hits = hits + 1!
+
+x = 1!
+x = 3!
+x = 4!
+
+assertEq("when fires once per x mutation (x>2)", hits, 2)!
+
+// 2) Re-entrancy guard: if body mutation would retrigger condition, we must NOT recurse forever.
+var var y = 0!
+var var yHits = 0!
+when (y ==== 1) yHits = yHits + 1!
+
+y = 1!
+
+assertEq("when body mutation does not recurse", yHits, 1)!
+
+// 3) Declaration should also be treated as a mutation (especially useful with scopes/shadowing).
+var var z = 0!
+var var zHits = 0!
+when (z ==== 7) zHits = zHits + 1!
+
+{
+    // new scope + declaration (shadowing)
+    var var z = 7!
+}
+
+assertEq("when fires on declaration (inner scope)", zHits, 1)!
+
+// 4) Still fires on assignment (outer scope)
+z = 7!
+assertEq("when fires on assignment too", zHits, 2)!
+
+print("=== SUMMARY ===")!
+print("total=" + total)!
+print("passed=" + passed)!
+print("failed=" + failed)!

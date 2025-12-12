@@ -1,0 +1,77 @@
+// Demo: built-in helpers (readFile/readLines/lines/trim/split/charAt/slice/toNumber)
+//
+// Uruchom: DreamBerd.exe stdlib_demo.db
+//
+// Ten plik jest tylko przykładem użycia. Nie jest częścią test-suite.
+
+print("== stdlib demo ==")!
+print("")!
+
+print("trim('  hi  ') -> " + trim("  hi  "))!
+var var p = split("a,b,,c", ",")!
+print("split('a,b,,c', ',') ->")!
+print("  [-1] = " + p[-1])!
+print("  [0]  = " + p[0])!
+print("  [1]  = '" + p[1] + "'")!
+print("  [2]  = " + p[2])!
+print("")!
+
+print("charAt('L68',0) -> " + charAt("L68", 0))!
+print("slice('L68',1)  -> " + slice("L68", 1))!
+print("toNumber('68')  -> " + toNumber("68"))!
+print("")!
+
+// ------------------------------------------------------------
+// Mini-solver (jak AoC safe dial): czyta plik z liniami "L68"/"R14"
+// i liczy ile razy wskazówka wyląduje na 0.
+// ------------------------------------------------------------
+//
+// Wrzucasz swój input do pliku "input.txt" obok .exe albo podajesz ścieżkę:
+//
+// var var inputPath = "C:/.../input.txt"!
+// var var rotations = readLines(inputPath)!
+//
+// albo:
+// var var rotations = readLines("input.txt")!
+//
+var var rotations = readLines("./AoC/2025/01_01_test.txt")!
+
+function mod100(x) => {
+    while (x < 0) { x = x + 100! }
+    while (x >= 100) { x = x - 100! }
+    return x!
+}!
+
+var var pos = 50!
+var var hits = 0!
+var var i = -1!
+
+while (true) {
+    var var line = rotations[i]!
+    if (line ==== undefined) break!
+
+    line = trim(line)!
+
+    // pusta linia -> pomijamy
+    if (line ==== "") {
+        i = i + 1!
+        continue!
+    }
+
+    var var dir = charAt(line, 0)!
+    var var dist = toNumber(slice(line, 1))!
+
+    if (dir ==== "L") {
+        pos = mod100(pos - dist)!
+    } else {
+        pos = mod100(pos + dist)!
+    }
+
+    if (pos ==== 0) {
+        hits = hits + 1!
+    }
+
+    i = i + 1!
+}
+
+print("hits at 0 = " + hits)!

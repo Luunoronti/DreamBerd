@@ -156,46 +156,11 @@ namespace DreamberdInterpreter
                 return ParseWhenStatement(pos);
             }
 
-            
-// domyślnie: wyrażenie jako statement
-// UWAGA: w DreamBerd pojedyncze '=' jest ultra-luźną równością, a nie przypisaniem.
-// Żeby zachować możliwość przypisań, traktujemy "x = expr!" jako specjalny przypadek statementu.
-if (Check(TokenType.Identifier))
-{
-    int save = _current;
-
-    Expression target = ParsePotentialAssignmentTarget();
-
-    if (Match(TokenType.Assign))
-    {
-        int assignPos = Previous().Position;
-        Expression value = ParseExpression();
-        bool debugAssign = ParseTerminatorIsDebug();
-
-        Expression assignExpr;
-        if (target is IdentifierExpression ident)
-        {
-            assignExpr = new AssignmentExpression(ident.Name, value, assignPos);
+            // domyślnie: wyrażenie jako statement
+            Expression expr = ParseExpression();
+            bool debug = ParseTerminatorIsDebug();
+            return new ExpressionStatement(expr, debug, expr.Position);
         }
-        else if (target is IndexExpression idx && idx.Target is IdentifierExpression arrIdent)
-        {
-            assignExpr = new IndexAssignmentExpression(arrIdent, idx.Index, value, assignPos);
-        }
-        else
-        {
-            throw new InterpreterException("Invalid assignment target.", assignPos);
-        }
-
-        return new ExpressionStatement(assignExpr, debugAssign, assignExpr.Position);
-    }
-
-    // To nie było przypisanie – cofamy się i parsujemy normalne wyrażenie.
-    _current = save;
-}
-
-Expression expr = ParseExpression();
-bool debug = ParseTerminatorIsDebug();
-return new ExpressionStatement(expr, debug, expr.Position);}
 
         private Statement ParseBlockStatementAfterOpeningBrace(int position)
         {
@@ -210,35 +175,60 @@ return new ExpressionStatement(expr, debug, expr.Position);}
             return new BlockStatement(statements, position);
         }
 
-        private bool ParseTerminatorIsDebug()
+        private readonly struct TerminatorInfo
         {
+            public bool IsDebug
+            {
+                get;
+            }
+
+            /// <summary>
+            /// Liczba wykrzykników na końcu statementu.
+            /// Dla terminatora '?' wartość wynosi 0.
+            /// </summary>
+            public int ExclamationCount
+            {
+                get;
+            }
+
+            public TerminatorInfo(bool isDebug, int exclamationCount)
+            {
+                IsDebug = isDebug;
+                ExclamationCount = exclamationCount;
+            }
+        }
+
+        private TerminatorInfo ParseTerminator()
+        {
+            // Gulf of Mexico / DreamBerd: można dać wiele '!' na końcu statementu.
+            // Dla większości statementów to jest tylko "extra"; dla deklaracji zmiennych
+            // ta liczba jest używana jako priorytet deklaracji (overloading).
             if (Match(TokenType.Bang))
-                return false;
+            {
+                int count = 1;
+                while (Match(TokenType.Bang))
+                    count++;
+
+                return new TerminatorInfo(isDebug: false, exclamationCount: count);
+            }
+
             if (Match(TokenType.Question))
-                return true;
+            {
+                // Pozwalamy na wielokrotne '??' jako debug-terminator.
+                while (Match(TokenType.Question))
+                {
+                    // noop
+                }
+
+                return new TerminatorInfo(isDebug: true, exclamationCount: 0);
+            }
+
             throw new InterpreterException("Expected '!' or '?' at end of statement.", Peek().Position);
         }
 
+        private bool ParseTerminatorIsDebug() => ParseTerminator().IsDebug;
 
-private Expression ParsePotentialAssignmentTarget()
-{
-    // Minimalny l-value, który akceptujemy w assignment-statement:
-    //   ident
-    //   ident[expr]
-    //   ident[expr][expr]...
-    Token nameTok = Consume(TokenType.Identifier, "Expected identifier.");
-    Expression expr = new IdentifierExpression(nameTok.Lexeme, nameTok.Position);
 
-    while (Match(TokenType.LeftBracket))
-    {
-        int lbPos = Previous().Position;
-        Expression index = ParseExpression();
-        Consume(TokenType.RightBracket, "Expected ']' after index.");
-        expr = new IndexExpression(expr, index, lbPos);
-    }
-
-    return expr;
-}
         private Statement ParseFunctionDeclaration()
         {
             // keyword: function / func / fun / fn / functi / f
@@ -352,10 +342,11 @@ private Expression ParsePotentialAssignmentTarget()
 
             Consume(TokenType.Assign, "Expected '=' after variable name.");
             Expression initializer = ParseExpression();
-            bool isDebug = ParseTerminatorIsDebug(); // ignored
-            _ = isDebug;
 
-            int priority = 0;
+            // Liczba wykrzykników determinuje priorytet deklaracji (overloading).
+            // '?' (debug) traktujemy jak zwykły terminator z domyślnym priorytetem 1.
+            var term = ParseTerminator();
+            int priority = term.IsDebug ? 1 : term.ExclamationCount;
 
             return new VariableDeclarationStatement(declKind, mutability, name, lifetime, priority, initializer, position);
         }
@@ -441,42 +432,57 @@ private Expression ParsePotentialAssignmentTarget()
             return new WhileStatement(condition, body, position);
         }
 
-        
-private Expression ParseExpression() => ParseAssignment();
+        private Expression ParseExpression() => ParseAssignment();
 
-private Expression ParseAssignment()
-{
-    // W DreamBerd pojedyncze '=' jest ultra-luźną równością, a nie przypisaniem.
-    // Przypisanie obsługujemy na poziomie statementu (patrz ParseStatement()).
-    Expression expr = ParseEquality();
+        private Expression ParseAssignment()
+        {
+            Expression expr = ParseEquality();
 
-    // cztero-gałęziowy operator warunkowy:
-    // cond ? t : f :: m ::: u
-    if (Match(TokenType.Question))
-    {
-        int qPos = Previous().Position;
+            if (Match(TokenType.Assign))
+            {
+                Expression value = ParseAssignment();
 
-        Expression whenTrue = ParseAssignment();
+                if (expr is IdentifierExpression ident)
+                {
+                    return new AssignmentExpression(ident.Name, value, ident.Position);
+                }
 
-        Consume(TokenType.Colon, "Expected ':' after true branch of conditional expression.");
-        Expression whenFalse = ParseAssignment();
+                if (expr is IndexExpression idx)
+                {
+                    return new IndexAssignmentExpression(idx.Target, idx.Index, value, idx.Position);
+                }
 
-        // '::'
-        Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
-        Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
-        Expression whenMaybe = ParseAssignment();
+                // Błąd najlepiej przypiąć do tokenu '=' (Previous()), bo to on zaczyna assignment.
+                throw new InterpreterException("Invalid assignment target.", Previous().Position);
+            }
 
-        // ':::'
-        Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
-        Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
-        Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
-        Expression whenUndefined = ParseAssignment();
+            // cztero-gałęziowy operator warunkowy:
+            // cond ? t : f :: m ::: u
+            if (Match(TokenType.Question))
+            {
+                int qPos = Previous().Position;
 
-        return new ConditionalExpression(expr, whenTrue, whenFalse, whenMaybe, whenUndefined, qPos);
-    }
+                Expression whenTrue = ParseAssignment();
 
-    return expr;
-}
+                Consume(TokenType.Colon, "Expected ':' after true branch of conditional expression.");
+                Expression whenFalse = ParseAssignment();
+
+                // '::'
+                Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
+                Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
+                Expression whenMaybe = ParseAssignment();
+
+                // ':::'
+                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+                Expression whenUndefined = ParseAssignment();
+
+                return new ConditionalExpression(expr, whenTrue, whenFalse, whenMaybe, whenUndefined, qPos);
+            }
+
+            return expr;
+        }
 
         private Expression ParseEquality()
         {
@@ -484,13 +490,7 @@ private Expression ParseAssignment()
 
             while (true)
             {
-                if (Match(TokenType.Assign))
-                {
-                    int pos = Previous().Position;
-                    Expression right = ParseComparison();
-                    expr = new BinaryExpression(expr, BinaryOperator.SingleEqual, right, pos);
-                }
-                else if (Match(TokenType.Equal))
+                if (Match(TokenType.Equal))
                 {
                     int pos = Previous().Position;
                     Expression right = ParseComparison();

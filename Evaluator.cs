@@ -1,6 +1,7 @@
 ﻿// Evaluator.cs
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace DreamberdInterpreter
 {
@@ -21,6 +22,10 @@ namespace DreamberdInterpreter
 
         private sealed class WhenSubscription
         {
+            public bool IsDisabled
+            {
+                get; set;
+            } = false;
             public Expression Condition
             {
                 get;
@@ -503,9 +508,6 @@ namespace DreamberdInterpreter
                 case BinaryOperator.Divide:
                     return EvaluateDivide(left, right, binary.Left.Position, binary.Right.Position);
 
-                case BinaryOperator.SingleEqual:
-                    return Value.FromBoolean(UltraLooseEquals(left, right));
-
                 case BinaryOperator.Equal:
                     return Value.FromBoolean(left.VeryLooseEquals(right));
 
@@ -549,76 +551,9 @@ namespace DreamberdInterpreter
             {
                 return Value.Undefined;
             }
+
             return Value.FromNumber(ToNumberAt(left, leftPosition) / divisor);
         }
-        private static bool UltraLooseEquals(Value left, Value right)
-        {
-            // Spec: jeśli chcesz DUŻO mniej precyzyjnie, użyj '=':
-            //   3 = 3.14! // true
-            //
-            // Implementacja: próbujemy zamienić obie strony na liczby i porównujemy po zaokrągleniu.
-            // (MidpointRounding.AwayFromZero: 0.5 -> 1, -0.5 -> -1)
-            //
-            // Dodatkowo:
-            //  - undefined = undefined => true
-            //  - null = null => true
-            //  - maybe -> 0.5
-            //  - gdy nie da się sensownie policzyć, robimy fallback do VeryLooseEquals (porównanie ToString()).
-
-            if (left.Kind == ValueKind.Undefined || right.Kind == ValueKind.Undefined)
-                return left.Kind == ValueKind.Undefined && right.Kind == ValueKind.Undefined;
-
-            if (left.Kind == ValueKind.Null || right.Kind == ValueKind.Null)
-                return left.Kind == ValueKind.Null && right.Kind == ValueKind.Null;
-
-            double l = UltraToNumber(left);
-            double r = UltraToNumber(right);
-
-            if (!double.IsNaN(l) && !double.IsNaN(r))
-            {
-                long lr = (long)Math.Round(l, MidpointRounding.AwayFromZero);
-                long rr = (long)Math.Round(r, MidpointRounding.AwayFromZero);
-                return lr == rr;
-            }
-
-            return left.VeryLooseEquals(right);
-        }
-
-        private static double UltraToNumber(Value v)
-        {
-            switch (v.Kind)
-            {
-                case ValueKind.Number:
-                    return v.Number;
-
-                case ValueKind.Boolean:
-                    return v.Bool switch
-                    {
-                        BooleanState.True => 1.0,
-                        BooleanState.False => 0.0,
-                        BooleanState.Maybe => 0.5,
-                        _ => 0.0
-                    };
-
-                case ValueKind.String:
-                    if (double.TryParse(v.String ?? "", System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double d))
-                        return d;
-                    return double.NaN;
-
-                case ValueKind.Null:
-                    return 0.0;
-
-                case ValueKind.Array:
-                    // Minimalnie: pusta tablica -> 0, niepusta -> 1 (żeby Round dało sensowny wynik).
-                    return (v.Array?.Count ?? 0) > 0 ? 1.0 : 0.0;
-
-                case ValueKind.Undefined:
-                default:
-                    return double.NaN;
-            }
-        }
-
-            
 
         private Value EvaluateConditional(ConditionalExpression condExpr)
         {
@@ -701,10 +636,16 @@ namespace DreamberdInterpreter
             return newValue;
         }
 
+        private bool isInVarMutationRoutine = false;
         private void OnVariableMutated()
         {
             if (_whenSubscriptions.Count == 0)
                 return;
+
+            if (isInVarMutationRoutine)
+                return;
+
+            isInVarMutationRoutine = true;
 
             var snapshot = _whenSubscriptions.ToArray();
             foreach (var sub in snapshot)
@@ -715,6 +656,7 @@ namespace DreamberdInterpreter
                     EvaluateStatement(sub.Body);
                 }
             }
+            isInVarMutationRoutine = false;
         }
 
         private Value EvaluateCall(CallExpression call)
@@ -733,6 +675,48 @@ namespace DreamberdInterpreter
                     }
 
                     return Value.Null;
+                }
+
+                if (string.Equals(name, "readFile", StringComparison.Ordinal))
+                {
+                    return EvaluateReadFileCall(call);
+                }
+
+                if (string.Equals(name, "readLines", StringComparison.Ordinal))
+                {
+                    return EvaluateReadLinesCall(call);
+                }
+
+                if (string.Equals(name, "lines", StringComparison.Ordinal))
+                {
+                    return EvaluateLinesCall(call);
+                }
+
+                if (string.Equals(name, "trim", StringComparison.Ordinal))
+                {
+                    return EvaluateTrimCall(call);
+                }
+
+                if (string.Equals(name, "split", StringComparison.Ordinal))
+                {
+                    return EvaluateSplitCall(call);
+                }
+
+                if (string.Equals(name, "charAt", StringComparison.Ordinal))
+                {
+                    return EvaluateCharAtCall(call);
+                }
+
+                if (string.Equals(name, "slice", StringComparison.Ordinal))
+                {
+                    return EvaluateSliceCall(call);
+                }
+
+                if (string.Equals(name, "toNumber", StringComparison.Ordinal) ||
+                    string.Equals(name, "parseInt", StringComparison.Ordinal) ||
+                    string.Equals(name, "parseNumber", StringComparison.Ordinal))
+                {
+                    return EvaluateToNumberCall(call);
                 }
 
                 if (string.Equals(name, "previous", StringComparison.Ordinal))
@@ -810,6 +794,261 @@ namespace DreamberdInterpreter
 
             return Value.FromArray(dict);
         }
+
+        // ------------------------------------------------------------
+        // Built-in helpers (stdlib-ish) implemented in C#
+        // ------------------------------------------------------------
+
+        private Value EvaluateReadFileCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 1)
+                throw new InterpreterException("readFile(path) expects exactly one argument.", call.Position);
+
+            Value pathVal = EvaluateExpression(call.Arguments[0]);
+            if (pathVal.Kind != ValueKind.String)
+                throw new InterpreterException("readFile(path) expects a string path.", call.Arguments[0].Position);
+
+            string path = pathVal.String ?? string.Empty;
+
+            try
+            {
+                string text = File.ReadAllText(path);
+                return Value.FromString(text);
+            }
+            catch (Exception ex)
+            {
+                throw new InterpreterException($"readFile(path) failed: {ex.Message}", call.Position);
+            }
+        }
+
+        private Value EvaluateReadLinesCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 1)
+                throw new InterpreterException("readLines(path) expects exactly one argument.", call.Position);
+
+            Value pathVal = EvaluateExpression(call.Arguments[0]);
+            if (pathVal.Kind != ValueKind.String)
+                throw new InterpreterException("readLines(path) expects a string path.", call.Arguments[0].Position);
+
+            string path = pathVal.String ?? string.Empty;
+
+            try
+            {
+                // ReadAllText + our own splitting keeps behaviour consistent with lines(text)
+                string text = File.ReadAllText(path);
+                var items = SplitLines(text);
+                return MakeStringArray(items);
+            }
+            catch (Exception ex)
+            {
+                throw new InterpreterException($"readLines(path) failed: {ex.Message}", call.Position);
+            }
+        }
+
+        private Value EvaluateLinesCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 1)
+                throw new InterpreterException("lines(text) expects exactly one argument.", call.Position);
+
+            Value textVal = EvaluateExpression(call.Arguments[0]);
+            if (textVal.Kind != ValueKind.String)
+                throw new InterpreterException("lines(text) expects a string.", call.Arguments[0].Position);
+
+            var items = SplitLines(textVal.String ?? string.Empty);
+            return MakeStringArray(items);
+        }
+
+        private Value EvaluateTrimCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 1)
+                throw new InterpreterException("trim(text) expects exactly one argument.", call.Position);
+
+            Value sVal = EvaluateExpression(call.Arguments[0]);
+            if (sVal.Kind != ValueKind.String)
+                throw new InterpreterException("trim(text) expects a string.", call.Arguments[0].Position);
+
+            return Value.FromString((sVal.String ?? string.Empty).Trim());
+        }
+
+        private Value EvaluateSplitCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 2)
+                throw new InterpreterException("split(text, sep) expects exactly two arguments.", call.Position);
+
+            Value sVal = EvaluateExpression(call.Arguments[0]);
+            Value sepVal = EvaluateExpression(call.Arguments[1]);
+
+            if (sVal.Kind != ValueKind.String)
+                throw new InterpreterException("split(text, sep) expects text as a string.", call.Arguments[0].Position);
+            if (sepVal.Kind != ValueKind.String)
+                throw new InterpreterException("split(text, sep) expects sep as a string.", call.Arguments[1].Position);
+
+            string s = sVal.String ?? string.Empty;
+            string sep = sepVal.String ?? string.Empty;
+
+            List<string> parts;
+
+            if (sep.Length == 0)
+            {
+                parts = new List<string>(s.Length);
+                foreach (char c in s)
+                    parts.Add(c.ToString());
+            }
+            else
+            {
+                var arr = s.Split(new[] { sep }, StringSplitOptions.None);
+                parts = new List<string>(arr.Length);
+                parts.AddRange(arr);
+            }
+
+            return MakeStringArray(parts);
+        }
+
+        private Value EvaluateCharAtCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 2)
+                throw new InterpreterException("charAt(text, index) expects exactly two arguments.", call.Position);
+
+            Value sVal = EvaluateExpression(call.Arguments[0]);
+            if (sVal.Kind != ValueKind.String)
+                throw new InterpreterException("charAt(text, index) expects text as a string.", call.Arguments[0].Position);
+
+            Value idxVal = EvaluateExpression(call.Arguments[1]);
+            if (!TryToInt(idxVal, out int index))
+                return Value.Undefined;
+
+            string s = sVal.String ?? string.Empty;
+            if (index < 0 || index >= s.Length)
+                return Value.Undefined;
+
+            return Value.FromString(s[index].ToString());
+        }
+
+        private Value EvaluateSliceCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 2)
+                throw new InterpreterException("slice(text, start) expects exactly two arguments.", call.Position);
+
+            Value sVal = EvaluateExpression(call.Arguments[0]);
+            if (sVal.Kind != ValueKind.String)
+                throw new InterpreterException("slice(text, start) expects text as a string.", call.Arguments[0].Position);
+
+            Value startVal = EvaluateExpression(call.Arguments[1]);
+            if (!TryToInt(startVal, out int start))
+                return Value.Undefined;
+
+            string s = sVal.String ?? string.Empty;
+
+            // allow negative start (count from end), like in many languages
+            if (start < 0)
+                start = s.Length + start;
+
+            if (start < 0)
+                start = 0;
+
+            if (start >= s.Length)
+                return Value.FromString(string.Empty);
+
+            return Value.FromString(s.Substring(start));
+        }
+
+        private Value EvaluateToNumberCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 1)
+                throw new InterpreterException("toNumber(x) expects exactly one argument.", call.Position);
+
+            Value x = EvaluateExpression(call.Arguments[0]);
+
+            switch (x.Kind)
+            {
+                case ValueKind.Number:
+                    return x;
+
+                case ValueKind.Boolean:
+                    return x.Bool switch
+                    {
+                        BooleanState.False => Value.FromNumber(0),
+                        BooleanState.True => Value.FromNumber(1),
+                        BooleanState.Maybe => Value.FromNumber(0.5),
+                        _ => Value.Undefined
+                    };
+
+                case ValueKind.String:
+                    if (double.TryParse(x.String ?? string.Empty, NumberStyles.Float, CultureInfo.InvariantCulture, out double d))
+                        return Value.FromNumber(d);
+                    return Value.Undefined;
+
+                case ValueKind.Null:
+                case ValueKind.Undefined:
+                    return Value.Undefined;
+
+                default:
+                    return Value.Undefined;
+            }
+        }
+
+        private static bool TryToInt(Value v, out int i)
+        {
+            i = 0;
+
+            double d;
+            try
+            {
+                d = v.Kind switch
+                {
+                    ValueKind.Number => v.Number,
+                    ValueKind.Boolean => v.Bool switch
+                    {
+                        BooleanState.False => 0,
+                        BooleanState.True => 1,
+                        BooleanState.Maybe => 0.5,
+                        _ => double.NaN
+                    },
+                    ValueKind.String => double.TryParse(v.String ?? string.Empty, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ? parsed : double.NaN,
+                    _ => double.NaN
+                };
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (double.IsNaN(d) || double.IsInfinity(d))
+                return false;
+
+            i = (int)Math.Truncate(d);
+            return true;
+        }
+
+        private static List<string> SplitLines(string text)
+        {
+            // normalize: support \r\n, \n, and \r
+            string norm = text.Replace("\r\n", "\n").Replace('\r', '\n');
+
+            var raw = norm.Split('\n');
+
+            int count = raw.Length;
+            if (count > 0 && raw[count - 1].Length == 0)
+                count--;
+
+            var list = new List<string>(count);
+            for (int i = 0; i < count; i++)
+                list.Add(raw[i]);
+
+            return list;
+        }
+
+        private static Value MakeStringArray(List<string> items)
+        {
+            var dict = new Dictionary<double, Value>(items.Count);
+            for (int i = 0; i < items.Count; i++)
+            {
+                dict[i - 1] = Value.FromString(items[i]);
+            }
+
+            return Value.FromArray(dict);
+        }
+
 
         private Value InvokeUserFunction(
             string name,

@@ -54,25 +54,6 @@ function assertFalse(name, cond) => {
     }
 }!
 
-
-
-// --------------------------------------------
-// 0) Operator '=' (ultra-luźna równość)
-// --------------------------------------------
-assertTrue("3 = 3.14 (round) => true", (3 = 3.14))!
-assertFalse("3 = 2.49 (round) => false", (3 = 2.49))!
-assertTrue("0 = 0.49 (round) => true", (0 = 0.49))!
-assertTrue("1 = 0.5 (round) => true", (1 = 0.5))!
-assertTrue("undefined = undefined => true", (undefined = undefined))!
-assertFalse("undefined = 0 => false", (undefined = 0))!
-
-// Sprawdźmy, że przypisania statementowe nadal działają
-var var eqAssign = 0!
-eqAssign = 5!
-assertEq("assignment statement still works", 5, eqAssign)!
-
-print("")!
-
 // --------------------------------------------
 // 1) Podstawy: arytmetyka / stringi / undefined
 // --------------------------------------------
@@ -196,6 +177,27 @@ var var r = 0!
     r = r + 100!
 }
 assertEq("reverse in block re-runs first stmt only", 2, r)!
+
+
+// --------------------------------------------
+// Overloading / priorytet deklaracji (wielokrotne '!')
+// --------------------------------------------
+
+// Najnowsza deklaracja z tym samym priorytetem wygrywa
+const const ov1 = "Luke"!
+const const ov1 = "Lu"!
+assertEq("overload - newest wins (same priority)", "Lu", ov1)!
+
+// Więcej wykrzykników => wyższy priorytet (nawet jeśli jest starsza)
+const const ov2 = "HighPriority"!!
+const const ov2 = "LowPriority"!
+assertEq("overload - higher priority wins", "HighPriority", ov2)!
+
+// Fallback po wygaśnięciu lifetime (high prio znika -> zostaje low)
+const const ov3<3> = "TEMP"!!
+const const ov3 = "PERSIST"!
+assertEq("overload - before expiry uses TEMP", "TEMP", ov3)!
+assertEq("overload - after expiry falls back to PERSIST", "PERSIST", ov3)!
 
 print("")!
 
