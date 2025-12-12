@@ -1,0 +1,195 @@
+// DreamBerd - test suite (samosprawdzające testy)
+// Uruchom: DreamBerd.exe dreamberd_tests.db
+//
+// Zasada: każdy test kończy się PASS/FAIL, a na końcu jest podsumowanie.
+// Ten plik będziemy rozbudowywać o kolejne testy przy nowych feature'ach.
+
+print("== DreamBerd test suite ==")!
+print("")!
+
+var var total = 0!
+var var passed = 0!
+var var failed = 0!
+
+function _fail(name, expected, actual) => {
+    print("❌ " + name)!
+    print("   expected: " + expected)!
+    print("   actual:   " + actual)!
+    failed = failed + 1!
+}!
+
+function assertEq(name, expected, actual) => {
+    total = total + 1!
+    if (expected ==== actual) {
+        print("✅ " + name)!
+        passed = passed + 1!
+    } else {
+        _fail(name, expected, actual)!
+    }
+}!
+
+function assertTrue(name, cond) => {
+    total = total + 1!
+    if (cond ==== true) {
+        print("✅ " + name)!
+        passed = passed + 1!
+    } else {
+        print("❌ " + name)!
+        print("   expected: true")!
+        print("   actual:   " + cond)!
+        failed = failed + 1!
+    }
+}!
+
+function assertFalse(name, cond) => {
+    total = total + 1!
+    if (cond ==== false) {
+        print("✅ " + name)!
+        passed = passed + 1!
+    } else {
+        print("❌ " + name)!
+        print("   expected: false")!
+        print("   actual:   " + cond)!
+        failed = failed + 1!
+    }
+}!
+
+// --------------------------------------------
+// 1) Podstawy: arytmetyka / stringi / undefined
+// --------------------------------------------
+assertEq("1 + 2 = 3", 3, 1 + 2)!
+assertEq("2 * 3 = 6", 6, 2 * 3)!
+assertEq("9 / 3 = 3", 3, 9 / 3)!
+//assertEq("string concat: \"a\" + 1 = \"a1\"", "a1", "a" + 1)!
+assertEq("division by zero => undefined", undefined, 1 / 0)!
+
+print("")!
+
+// --------------------------------------------
+// 2) 4-gałęziowy operator warunkowy
+//    cond ? t : f :: m ::: u
+// --------------------------------------------
+assertEq("cond=true -> t", 1, true ? 1 : 2 :: 3 ::: 4)!
+assertEq("cond=false -> f", 2, false ? 1 : 2 :: 3 ::: 4)!
+assertEq("cond=maybe -> m", 3, maybe ? 1 : 2 :: 3 ::: 4)!
+assertEq("cond=undefined -> u", 4, undefined ? 1 : 2 :: 3 ::: 4)!
+
+print("")!
+
+// --------------------------------------------
+// 3) if + truthiness (maybe prawdziwe, undefined fałszywe)
+// --------------------------------------------
+function truthy(x) => {
+    if (x) return true!
+    else return false!
+}!
+
+assertEq("if(maybe) -> true", true, truthy(maybe))!
+assertEq("if(undefined) -> false", false, truthy(undefined))!
+
+print("")!
+
+// --------------------------------------------
+// 4) Tablice (indeks od -1) + przypisanie pod indeksem
+// --------------------------------------------
+var var arr = [10, 20, 30]!
+assertEq("arr[-1] == 10", 10, arr[-1])!
+assertEq("arr[0] == 20", 20, arr[0])!
+assertEq("arr[1] == 30", 30, arr[1])!
+assertEq("arr[999] missing => undefined", undefined, arr[999])!
+
+arr[-1] = 77!
+assertEq("arr[-1] after assignment == 77", 77, arr[-1])!
+
+print("")!
+
+// --------------------------------------------
+// 5) Historia zmiennych: previous/next/history
+// --------------------------------------------
+var var x = 1!
+x = 2!
+x = 3!
+
+var var p1 = previous(x)!
+assertEq("previous(x) #1 returns 2", 2, p1)!
+assertEq("x after previous #1 == 2", 2, x)!
+
+var var p2 = previous(x)!
+assertEq("previous(x) #2 returns 1", 1, p2)!
+assertEq("x after previous #2 == 1", 1, x)!
+
+var var n1 = next(x)!
+assertEq("next(x) #1 returns 2", 2, n1)!
+assertEq("x after next #1 == 2", 2, x)!
+
+var var n2 = next(x)!
+assertEq("next(x) #2 returns 3", 3, n2)!
+assertEq("x after next #2 == 3", 3, x)!
+
+var var hx = history(x)!
+assertEq("history(x)[-1] == 1", 1, hx[-1])!
+assertEq("history(x)[0] == 2", 2, hx[0])!
+assertEq("history(x)[1] == 3", 3, hx[1])!
+
+print("")!
+
+// --------------------------------------------
+// 6) Funkcje + return + rekurencja
+// --------------------------------------------
+function fact(n) => {
+    if (n ==== 0) return 1!
+    return n * fact(n - 1)!
+}!
+
+assertEq("fact(5) == 120", 120, fact(5))!
+
+print("")!
+
+// --------------------------------------------
+// 7) while + break! + continue!
+// --------------------------------------------
+var var c = 0!
+while (true) {
+    c = c + 1!
+    if (c ==== 5) break!
+}
+assertEq("while(true) + break! stops at 5", 5, c)!
+
+var var i = 0!
+var var sum = 0!
+while (i < 5) {
+    i = i + 1!
+    if (i ==== 3) continue!
+    sum = sum + 10!
+}
+assertEq("continue! skips exactly one add (i==3)", 40, sum)!
+
+print("")!
+
+// --------------------------------------------
+// 8) Bloki + reverse (lokalnie w bloku)
+// --------------------------------------------
+var var r = 0!
+{
+    r = r + 1!
+    reverse
+    r = r + 10!
+    r = r + 100!
+}
+assertEq("reverse in block re-runs first stmt only", 2, r)!
+
+print("")!
+
+// --------------------------------------------
+// Podsumowanie
+// --------------------------------------------
+print("== Summary ==")!
+print("passed: " + passed)!
+print("failed: " + failed)!
+print("total:  " + total)!
+
+if (failed ==== 0) {
+    print("🎉 ALL TESTS PASSED")!
+} else {
+    print("🚨 SOME TESTS FAILED")!
+}
