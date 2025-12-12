@@ -175,14 +175,59 @@ namespace DreamberdInterpreter
             return new BlockStatement(statements, position);
         }
 
-        private bool ParseTerminatorIsDebug()
+        private readonly struct TerminatorInfo
         {
+            public bool IsDebug
+            {
+                get;
+            }
+
+            /// <summary>
+            /// Liczba wykrzykników na końcu statementu.
+            /// Dla terminatora '?' wartość wynosi 0.
+            /// </summary>
+            public int ExclamationCount
+            {
+                get;
+            }
+
+            public TerminatorInfo(bool isDebug, int exclamationCount)
+            {
+                IsDebug = isDebug;
+                ExclamationCount = exclamationCount;
+            }
+        }
+
+        private TerminatorInfo ParseTerminator()
+        {
+            // Gulf of Mexico / DreamBerd: można dać wiele '!' na końcu statementu.
+            // Dla większości statementów to jest tylko "extra"; dla deklaracji zmiennych
+            // ta liczba jest używana jako priorytet deklaracji (overloading).
             if (Match(TokenType.Bang))
-                return false;
+            {
+                int count = 1;
+                while (Match(TokenType.Bang))
+                    count++;
+
+                return new TerminatorInfo(isDebug: false, exclamationCount: count);
+            }
+
             if (Match(TokenType.Question))
-                return true;
+            {
+                // Pozwalamy na wielokrotne '??' jako debug-terminator.
+                while (Match(TokenType.Question))
+                {
+                    // noop
+                }
+
+                return new TerminatorInfo(isDebug: true, exclamationCount: 0);
+            }
+
             throw new InterpreterException("Expected '!' or '?' at end of statement.", Peek().Position);
         }
+
+        private bool ParseTerminatorIsDebug() => ParseTerminator().IsDebug;
+
 
         private Statement ParseFunctionDeclaration()
         {
@@ -297,10 +342,11 @@ namespace DreamberdInterpreter
 
             Consume(TokenType.Assign, "Expected '=' after variable name.");
             Expression initializer = ParseExpression();
-            bool isDebug = ParseTerminatorIsDebug(); // ignored
-            _ = isDebug;
 
-            int priority = 0;
+            // Liczba wykrzykników determinuje priorytet deklaracji (overloading).
+            // '?' (debug) traktujemy jak zwykły terminator z domyślnym priorytetem 1.
+            var term = ParseTerminator();
+            int priority = term.IsDebug ? 1 : term.ExclamationCount;
 
             return new VariableDeclarationStatement(declKind, mutability, name, lifetime, priority, initializer, position);
         }
