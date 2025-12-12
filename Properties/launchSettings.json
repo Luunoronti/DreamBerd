@@ -1,8 +1,7 @@
 {
   "profiles": {
     "DreamBerd": {
-      "commandName": "Project",
-      "commandLineArgs": " C:\\Work\\DreamBerd\\test_when.db"
+      "commandName": "Project"
     }
   }
 }
