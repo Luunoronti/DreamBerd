@@ -15,6 +15,10 @@ namespace DreamberdInterpreter
 
         private int _currentStatementIndex;
 
+        // Głębokość zagnieżdżenia pętli while.
+        // Używamy tego do walidacji break/continue (poza pętlą = błąd).
+        private int _loopDepth;
+
         private sealed class WhenSubscription
         {
             public Expression Condition
@@ -66,6 +70,20 @@ namespace DreamberdInterpreter
             {
                 Value = value;
             }
+        }
+
+        /// <summary>
+        /// Wewnętrzny sygnał break (wyjście z najbliższej pętli while).
+        /// </summary>
+        private sealed class BreakSignal : Exception
+        {
+        }
+
+        /// <summary>
+        /// Wewnętrzny sygnał continue (następna iteracja najbliższej pętli while).
+        /// </summary>
+        private sealed class ContinueSignal : Exception
+        {
         }
 
         private sealed class CallFrame
@@ -280,6 +298,51 @@ namespace DreamberdInterpreter
                             return EvaluateStatement(ifs.ElseBranch);
                         }
                         return Value.Null;
+                    }
+
+                case WhileStatement ws:
+                    {
+                        _loopDepth++;
+                        try
+                        {
+                            while (EvaluateExpression(ws.Condition).IsTruthy())
+                            {
+                                try
+                                {
+                                    EvaluateStatement(ws.Body);
+                                }
+                                catch (ContinueSignal)
+                                {
+                                    // pomijamy resztę ciała i zaczynamy kolejną iterację
+                                    continue;
+                                }
+                                catch (BreakSignal)
+                                {
+                                    // wychodzimy z pętli
+                                    break;
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            _loopDepth--;
+                        }
+
+                        return Value.Null;
+                    }
+
+                case BreakStatement:
+                    {
+                        if (_loopDepth <= 0)
+                            throw new InterpreterException("break can only be used inside a while loop.");
+                        throw new BreakSignal();
+                    }
+
+                case ContinueStatement:
+                    {
+                        if (_loopDepth <= 0)
+                            throw new InterpreterException("continue can only be used inside a while loop.");
+                        throw new ContinueSignal();
                     }
 
                 case ReverseStatement _:

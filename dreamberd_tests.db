@@ -172,7 +172,7 @@ print("")!
 var var r = 0!
 {
     r = r + 1!
-    reverse
+    reverse!
     r = r + 10!
     r = r + 100!
 }

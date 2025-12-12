@@ -17,6 +17,9 @@ namespace DreamberdInterpreter
         If,
         Else,
         Return,
+        While,
+        Break,
+        Continue,
 
         LeftParen,
         RightParen,

@@ -192,7 +192,7 @@ namespace DreamberdInterpreter
                     }
                     else
                     {
-                        throw new InterpreterException($"Unexpected character '{c}' at position {_current - 1}.");
+                    throw new InterpreterException($"Unexpected character '{c}'.", _current - 1);
                     }
                     break;
             }
@@ -208,7 +208,7 @@ namespace DreamberdInterpreter
             }
 
             if (IsAtEnd())
-                throw new InterpreterException("Unterminated string literal.");
+            throw new InterpreterException("Unterminated string literal.", _start);
 
             Advance(); // closing quote
             AddToken(TokenType.String, sb.ToString());
@@ -228,7 +228,7 @@ namespace DreamberdInterpreter
 
             string text = _source.Substring(_start, _current - _start);
             if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
-                throw new InterpreterException($"Invalid number literal '{text}'.");
+            throw new InterpreterException($"Invalid number literal '{text}'.", _start);
 
             AddToken(TokenType.Number, value);
         }
@@ -251,6 +251,9 @@ namespace DreamberdInterpreter
                 "if" => TokenType.If,
                 "else" => TokenType.Else,
                 "return" => TokenType.Return,
+                "while" => TokenType.While,
+                "break" => TokenType.Break,
+                "continue" => TokenType.Continue,
                 _ => TokenType.Identifier
             };
 

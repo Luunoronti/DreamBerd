@@ -47,7 +47,8 @@ namespace DreamberdInterpreter
         private Token Consume(TokenType type, string message)
         {
             if (Check(type)) return Advance();
-            throw new InterpreterException(message + $" Found '{Peek().Lexeme}'.");
+            var t = Peek();
+            throw new InterpreterException(message + $" Found '{t.Lexeme}'.", t.Position);
         }
 
         public List<Statement> ParseProgram()
@@ -88,6 +89,25 @@ namespace DreamberdInterpreter
             if (Match(TokenType.If))
             {
                 return ParseIfStatement();
+            }
+
+            if (Match(TokenType.While))
+            {
+                return ParseWhileStatement();
+            }
+
+            if (Match(TokenType.Break))
+            {
+                // break!
+                Consume(TokenType.Bang, "Expected '!' after 'break'.");
+                return new BreakStatement();
+            }
+
+            if (Match(TokenType.Continue))
+            {
+                // continue!
+                Consume(TokenType.Bang, "Expected '!' after 'continue'.");
+                return new ContinueStatement();
             }
 
             if (Match(TokenType.Return))
@@ -154,7 +174,7 @@ namespace DreamberdInterpreter
                 return false;
             if (Match(TokenType.Question))
                 return true;
-            throw new InterpreterException("Expected '!' or '?' at end of statement.");
+            throw new InterpreterException("Expected '!' or '?' at end of statement.", Peek().Position);
         }
 
         private Statement ParseFunctionDeclaration()
@@ -225,7 +245,7 @@ namespace DreamberdInterpreter
             else if (Match(TokenType.Var))
                 firstKw = TokenType.Var;
             else
-                throw new InterpreterException("Expected 'const' or 'var' at variable declaration.");
+            throw new InterpreterException("Expected 'const' or 'var' at variable declaration.", Peek().Position);
 
             TokenType secondKw;
             if (Match(TokenType.Const))
@@ -233,7 +253,7 @@ namespace DreamberdInterpreter
             else if (Match(TokenType.Var))
                 secondKw = TokenType.Var;
             else
-                throw new InterpreterException("Variable declaration must use two keywords (e.g. 'const const', 'var var').");
+            throw new InterpreterException("Variable declaration must use two keywords (e.g. 'const const', 'var var').", Peek().Position);
 
             DeclarationKind declKind = DeclarationKind.Normal;
             Mutability mutability;
@@ -341,6 +361,17 @@ namespace DreamberdInterpreter
             return new IfStatement(condition, thenStmt, elseStmt);
         }
 
+        private Statement ParseWhileStatement()
+        {
+            Consume(TokenType.LeftParen, "Expected '(' after 'while'.");
+            Expression condition = ParseExpression();
+            Consume(TokenType.RightParen, "Expected ')' after while condition.");
+
+            // podobnie jak w if: body może być pojedynczym statementem albo blokiem
+            Statement body = ParseStatement();
+            return new WhileStatement(condition, body);
+        }
+
         private Expression ParseExpression() => ParseAssignment();
 
         private Expression ParseAssignment()
@@ -361,7 +392,8 @@ namespace DreamberdInterpreter
                     return new IndexAssignmentExpression(idx.Target, idx.Index, value);
                 }
 
-                throw new InterpreterException("Invalid assignment target.");
+                // Błąd najlepiej przypiąć do tokenu '=' (Previous()), bo to on zaczyna assignment.
+                throw new InterpreterException("Invalid assignment target.", Previous().Position);
             }
 
             // cztero-gałęziowy operator warunkowy:
@@ -605,7 +637,7 @@ namespace DreamberdInterpreter
                 return new ArrayLiteralExpression(elements);
             }
 
-            throw new InterpreterException($"Unexpected token '{Peek().Lexeme}'.");
+            throw new InterpreterException($"Unexpected token '{Peek().Lexeme}'.", Peek().Position);
         }
     }
 }

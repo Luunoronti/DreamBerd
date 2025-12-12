@@ -232,6 +232,44 @@ namespace DreamberdInterpreter
     }
 
     /// <summary>
+    /// while (condition) body
+    ///
+    /// Uwaga: to jest statement, więc samo "while" nie kończy się '!'.
+    /// Terminatory są wewnątrz body (np. print(...)!).
+    /// </summary>
+    public sealed class WhileStatement : Statement
+    {
+        public Expression Condition
+        {
+            get;
+        }
+        public Statement Body
+        {
+            get;
+        }
+
+        public WhileStatement(Expression condition, Statement body)
+        {
+            Condition = condition ?? throw new ArgumentNullException(nameof(condition));
+            Body = body ?? throw new ArgumentNullException(nameof(body));
+        }
+    }
+
+    /// <summary>
+    /// break!
+    /// </summary>
+    public sealed class BreakStatement : Statement
+    {
+    }
+
+    /// <summary>
+    /// continue!
+    /// </summary>
+    public sealed class ContinueStatement : Statement
+    {
+    }
+
+    /// <summary>
     /// Blok { ... }.
     ///
     /// Uwaga: na tym etapie to jest tylko "grupowanie" instrukcji.
