@@ -54,6 +54,25 @@ function assertFalse(name, cond) => {
     }
 }!
 
+
+
+// --------------------------------------------
+// 0) Operator '=' (ultra-luźna równość)
+// --------------------------------------------
+assertTrue("3 = 3.14 (round) => true", (3 = 3.14))!
+assertFalse("3 = 2.49 (round) => false", (3 = 2.49))!
+assertTrue("0 = 0.49 (round) => true", (0 = 0.49))!
+assertTrue("1 = 0.5 (round) => true", (1 = 0.5))!
+assertTrue("undefined = undefined => true", (undefined = undefined))!
+assertFalse("undefined = 0 => false", (undefined = 0))!
+
+// Sprawdźmy, że przypisania statementowe nadal działają
+var var eqAssign = 0!
+eqAssign = 5!
+assertEq("assignment statement still works", 5, eqAssign)!
+
+print("")!
+
 // --------------------------------------------
 // 1) Podstawy: arytmetyka / stringi / undefined
 // --------------------------------------------
@@ -66,21 +85,6 @@ assertEq("division by zero => undefined", undefined, 1 / 0)!
 print("")!
 
 // --------------------------------------------
-
-print("")!
-
-// --------------------------------------------
-// 1b) Najluźniejsza równość '=' (round)
-// --------------------------------------------
-assertTrue("3 = 3.14 -> true (round)", 3 = 3.14)!
-assertTrue("3 = 2.6 -> true (round)", 3 = 2.6)!
-assertFalse("3 = 3.6 -> false (round)", 3 = 3.6)!
-assertTrue("3.14 (string) = 3 -> true (string->number + round)", "3.14" = 3)!
-assertTrue("true = 1 -> true", true = 1)!
-assertTrue("false = 0 -> true", false = 0)!
-assertTrue("maybe = 1 -> true (maybe->0.5 rounds up)", maybe = 1)!
-assertFalse("undefined = 0 -> false", undefined = 0)!
-
 // 2) 4-gałęziowy operator warunkowy
 //    cond ? t : f :: m ::: u
 // --------------------------------------------

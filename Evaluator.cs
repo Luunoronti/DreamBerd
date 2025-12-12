@@ -504,7 +504,7 @@ namespace DreamberdInterpreter
                     return EvaluateDivide(left, right, binary.Left.Position, binary.Right.Position);
 
                 case BinaryOperator.SingleEqual:
-                    return Value.FromBoolean(left.UltraLooseEquals(right));
+                    return Value.FromBoolean(UltraLooseEquals(left, right));
 
                 case BinaryOperator.Equal:
                     return Value.FromBoolean(left.VeryLooseEquals(right));
@@ -549,9 +549,76 @@ namespace DreamberdInterpreter
             {
                 return Value.Undefined;
             }
-
             return Value.FromNumber(ToNumberAt(left, leftPosition) / divisor);
         }
+        private static bool UltraLooseEquals(Value left, Value right)
+        {
+            // Spec: jeśli chcesz DUŻO mniej precyzyjnie, użyj '=':
+            //   3 = 3.14! // true
+            //
+            // Implementacja: próbujemy zamienić obie strony na liczby i porównujemy po zaokrągleniu.
+            // (MidpointRounding.AwayFromZero: 0.5 -> 1, -0.5 -> -1)
+            //
+            // Dodatkowo:
+            //  - undefined = undefined => true
+            //  - null = null => true
+            //  - maybe -> 0.5
+            //  - gdy nie da się sensownie policzyć, robimy fallback do VeryLooseEquals (porównanie ToString()).
+
+            if (left.Kind == ValueKind.Undefined || right.Kind == ValueKind.Undefined)
+                return left.Kind == ValueKind.Undefined && right.Kind == ValueKind.Undefined;
+
+            if (left.Kind == ValueKind.Null || right.Kind == ValueKind.Null)
+                return left.Kind == ValueKind.Null && right.Kind == ValueKind.Null;
+
+            double l = UltraToNumber(left);
+            double r = UltraToNumber(right);
+
+            if (!double.IsNaN(l) && !double.IsNaN(r))
+            {
+                long lr = (long)Math.Round(l, MidpointRounding.AwayFromZero);
+                long rr = (long)Math.Round(r, MidpointRounding.AwayFromZero);
+                return lr == rr;
+            }
+
+            return left.VeryLooseEquals(right);
+        }
+
+        private static double UltraToNumber(Value v)
+        {
+            switch (v.Kind)
+            {
+                case ValueKind.Number:
+                    return v.Number;
+
+                case ValueKind.Boolean:
+                    return v.Bool switch
+                    {
+                        BooleanState.True => 1.0,
+                        BooleanState.False => 0.0,
+                        BooleanState.Maybe => 0.5,
+                        _ => 0.0
+                    };
+
+                case ValueKind.String:
+                    if (double.TryParse(v.String ?? "", System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double d))
+                        return d;
+                    return double.NaN;
+
+                case ValueKind.Null:
+                    return 0.0;
+
+                case ValueKind.Array:
+                    // Minimalnie: pusta tablica -> 0, niepusta -> 1 (żeby Round dało sensowny wynik).
+                    return (v.Array?.Count ?? 0) > 0 ? 1.0 : 0.0;
+
+                case ValueKind.Undefined:
+                default:
+                    return double.NaN;
+            }
+        }
+
+            
 
         private Value EvaluateConditional(ConditionalExpression condExpr)
         {
@@ -614,10 +681,10 @@ namespace DreamberdInterpreter
             Value targetVal = EvaluateExpression(ia.Target);
 
             if (targetVal.Kind != ValueKind.Array || targetVal.Array == null)
-                throw new InterpreterException("Index assignment is only supported on arrays.", idxAssign.Position);
+                throw new InterpreterException("Index assignment is only supported on arrays.", ia.Position);
 
             Value indexVal = EvaluateExpression(ia.Index);
-            double index = ToNumberAt(indexVal, idxAssign.Index.Position);
+            double index = ToNumberAt(indexVal, ia.Index.Position);
 
             var dict = new Dictionary<double, Value>(targetVal.Array);
             Value newValue = EvaluateExpression(ia.ValueExpression);
@@ -743,7 +810,7 @@ namespace DreamberdInterpreter
 
             return Value.FromArray(dict);
         }
-        
+
         private Value InvokeUserFunction(
             string name,
             FunctionDefinition def,

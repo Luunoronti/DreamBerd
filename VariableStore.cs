@@ -64,20 +64,21 @@ namespace DreamberdInterpreter
             _scopes.RemoveAt(_scopes.Count - 1);
         }
 
-        private bool TryFindEntry(string name, out Entry entry, out Dictionary<string, Entry> scope)
+        private bool TryFindEntry(string name, out Entry? entry, out Dictionary<string, Entry>? scope)
         {
             for (int i = _scopes.Count - 1; i >= 0; i--)
             {
                 var dict = _scopes[i];
-                if (dict.TryGetValue(name, out entry))
+                if (dict.TryGetValue(name, out var found))
                 {
+                    entry = found;
                     scope = dict;
                     return true;
                 }
             }
 
-            entry = null!;
-            scope = null!;
+            entry = null;
+            scope = null;
             return false;
         }
 
@@ -123,11 +124,11 @@ public void Declare(
         }
 
 
-public bool TryGet(string name, out Value value)
+	public bool TryGet(string name, out Value value)
         {
             if (TryFindEntry(name, out var entry, out _))
             {
-                value = entry.CurrentValue;
+                value = entry!.CurrentValue;
                 return true;
             }
 
@@ -139,7 +140,7 @@ public bool TryGet(string name, out Value value)
 public Value Get(string name)
         {
             if (TryFindEntry(name, out var entry, out _))
-                return entry.CurrentValue;
+                return entry!.CurrentValue;
 
             throw new InterpreterException($"Variable '{name}' is not defined.");
         }
@@ -147,8 +148,10 @@ public Value Get(string name)
 
 public void Assign(string name, Value newValue, int statementIndex)
         {
-            if (!TryFindEntry(name, out var entry, out _))
+            if (!TryFindEntry(name, out var entry, out _) || entry == null)
                 throw new InterpreterException($"Variable '{name}' is not defined.");
+
+            //entry = entry!;
 
             if (entry.Mutability == Mutability.ConstConst ||
                 entry.Mutability == Mutability.ConstVar)
@@ -165,7 +168,7 @@ public void Delete(string name)
         {
             if (TryFindEntry(name, out _, out var scope))
             {
-                scope.Remove(name);
+                scope!.Remove(name);
             }
         }
 
@@ -193,21 +196,23 @@ public void ExpireLifetimes(int currentStatementIndex, DateTime nowUtc)
                         case LifetimeKind.None:
                             break;
 
-                        case LifetimeKind.Infinite:
+                        case LifetimeKind.Infinity:
                             break;
 
-                        case LifetimeKind.StatementCount:
+                        // <N> (linie / statementy)
+                        case LifetimeKind.Lines:
                             {
                                 int age = currentStatementIndex - info.DeclarationIndex;
-                                if (age >= lifetime.StatementCount)
+                                if (age >= lifetime.Value)
                                     toRemove.Add((scope, name));
                                 break;
                             }
 
-                        case LifetimeKind.TimeSpan:
+                        // <Ns> (czas)
+                        case LifetimeKind.Seconds:
                             {
                                 var age = nowUtc - info.CreatedAtUtc;
-                                if (age >= lifetime.Duration)
+                                if (age.TotalSeconds >= lifetime.Value)
                                     toRemove.Add((scope, name));
                                 break;
                             }
@@ -229,8 +234,8 @@ public bool TryGetHistory(string name, out IReadOnlyList<Value> values, out int 
         {
             if (TryFindEntry(name, out var entry, out _))
             {
-                values = entry.History.Values;
-                currentIndex = entry.History.Index;
+                values = entry!.History.Values;
+                currentIndex = entry!.History.Index;
                 return true;
             }
 
@@ -245,8 +250,10 @@ public bool TryPrevious(string name, out Value newValue, out bool changed)
             newValue = default;
             changed = false;
 
-            if (!TryFindEntry(name, out var entry, out _))
+            if (!TryFindEntry(name, out var entry, out _) || entry == null)
                 return false;
+
+            //entry = entry!;
 
             var hist = entry.History;
             if (hist.Values.Count == 0)
@@ -273,8 +280,10 @@ public bool TryNext(string name, out Value newValue, out bool changed)
             newValue = default;
             changed = false;
 
-            if (!TryFindEntry(name, out var entry, out _))
+            if (!TryFindEntry(name, out var entry, out _) || entry == null)
                 return false;
+
+            //entry = entry!;
 
             var hist = entry.History;
             if (hist.Values.Count == 0)

@@ -156,11 +156,46 @@ namespace DreamberdInterpreter
                 return ParseWhenStatement(pos);
             }
 
-            // domyślnie: wyrażenie jako statement
-            Expression expr = ParseExpression();
-            bool debug = ParseTerminatorIsDebug();
-            return new ExpressionStatement(expr, debug, expr.Position);
+            
+// domyślnie: wyrażenie jako statement
+// UWAGA: w DreamBerd pojedyncze '=' jest ultra-luźną równością, a nie przypisaniem.
+// Żeby zachować możliwość przypisań, traktujemy "x = expr!" jako specjalny przypadek statementu.
+if (Check(TokenType.Identifier))
+{
+    int save = _current;
+
+    Expression target = ParsePotentialAssignmentTarget();
+
+    if (Match(TokenType.Assign))
+    {
+        int assignPos = Previous().Position;
+        Expression value = ParseExpression();
+        bool debugAssign = ParseTerminatorIsDebug();
+
+        Expression assignExpr;
+        if (target is IdentifierExpression ident)
+        {
+            assignExpr = new AssignmentExpression(ident.Name, value, assignPos);
         }
+        else if (target is IndexExpression idx && idx.Target is IdentifierExpression arrIdent)
+        {
+            assignExpr = new IndexAssignmentExpression(arrIdent, idx.Index, value, assignPos);
+        }
+        else
+        {
+            throw new InterpreterException("Invalid assignment target.", assignPos);
+        }
+
+        return new ExpressionStatement(assignExpr, debugAssign, assignExpr.Position);
+    }
+
+    // To nie było przypisanie – cofamy się i parsujemy normalne wyrażenie.
+    _current = save;
+}
+
+Expression expr = ParseExpression();
+bool debug = ParseTerminatorIsDebug();
+return new ExpressionStatement(expr, debug, expr.Position);}
 
         private Statement ParseBlockStatementAfterOpeningBrace(int position)
         {
@@ -184,6 +219,26 @@ namespace DreamberdInterpreter
             throw new InterpreterException("Expected '!' or '?' at end of statement.", Peek().Position);
         }
 
+
+private Expression ParsePotentialAssignmentTarget()
+{
+    // Minimalny l-value, który akceptujemy w assignment-statement:
+    //   ident
+    //   ident[expr]
+    //   ident[expr][expr]...
+    Token nameTok = Consume(TokenType.Identifier, "Expected identifier.");
+    Expression expr = new IdentifierExpression(nameTok.Lexeme, nameTok.Position);
+
+    while (Match(TokenType.LeftBracket))
+    {
+        int lbPos = Previous().Position;
+        Expression index = ParseExpression();
+        Consume(TokenType.RightBracket, "Expected ']' after index.");
+        expr = new IndexExpression(expr, index, lbPos);
+    }
+
+    return expr;
+}
         private Statement ParseFunctionDeclaration()
         {
             // keyword: function / func / fun / fn / functi / f
@@ -386,54 +441,50 @@ namespace DreamberdInterpreter
             return new WhileStatement(condition, body, position);
         }
 
-        private Expression ParseExpression() => ParseAssignment();
+        
+private Expression ParseExpression() => ParseAssignment();
 
-        private Expression ParseAssignment()
-        {
-            // Uwaga: w DreamBerd pojedyncze '=' może być zarówno przypisaniem,
-            // jak i "najluźniejszą równością" (patrz README Gulf of Mexico).
-            // Rozróżniamy to tak:
-            // - jeżeli lewa strona jest l-wartością (identyfikator / indeks) -> assignment
-            // - w przeciwnym razie -> operator równości '=' (BinaryOperator.SingleEqual)
-            Expression expr = ParseEquality(allowSingleEqual: false);
+private Expression ParseAssignment()
+{
+    // W DreamBerd pojedyncze '=' jest ultra-luźną równością, a nie przypisaniem.
+    // Przypisanie obsługujemy na poziomie statementu (patrz ParseStatement()).
+    Expression expr = ParseEquality();
 
-            if (Match(TokenType.Assign))
-            {
-                int pos = Previous().Position;
+    // cztero-gałęziowy operator warunkowy:
+    // cond ? t : f :: m ::: u
+    if (Match(TokenType.Question))
+    {
+        int qPos = Previous().Position;
 
-                if (expr is IdentifierExpression ident)
-                {
-                    Expression value = ParseAssignment();
-                    return new AssignmentExpression(ident.Name, value, ident.Position);
-                }
+        Expression whenTrue = ParseAssignment();
 
-                if (expr is IndexExpression idx)
-                {
-                    Expression value = ParseAssignment();
-                    return new IndexAssignmentExpression(idx.Target, idx.Index, value, idx.Position);
-                }
+        Consume(TokenType.Colon, "Expected ':' after true branch of conditional expression.");
+        Expression whenFalse = ParseAssignment();
 
-                // Nie da się przypisać -> traktujemy '=' jako "najluźniejszą równość"
-                Expression right = ParseComparison();
-                Expression eq = new BinaryExpression(expr, BinaryOperator.SingleEqual, right, pos);
-                return ParseEqualityRest(eq, allowSingleEqual: true);
-            }
+        // '::'
+        Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
+        Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
+        Expression whenMaybe = ParseAssignment();
 
-            // Brak '=' do przypisania: dopinamy ewentualne operatory równości, w tym pojedyncze '='.
-            return ParseEqualityRest(expr, allowSingleEqual: true);
-        }
+        // ':::'
+        Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+        Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+        Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+        Expression whenUndefined = ParseAssignment();
 
-        private Expression ParseEquality(bool allowSingleEqual)
+        return new ConditionalExpression(expr, whenTrue, whenFalse, whenMaybe, whenUndefined, qPos);
+    }
+
+    return expr;
+}
+
+        private Expression ParseEquality()
         {
             Expression expr = ParseComparison();
-            return ParseEqualityRest(expr, allowSingleEqual);
-        }
 
-        private Expression ParseEqualityRest(Expression expr, bool allowSingleEqual)
-        {
             while (true)
             {
-                if (allowSingleEqual && Match(TokenType.Assign))
+                if (Match(TokenType.Assign))
                 {
                     int pos = Previous().Position;
                     Expression right = ParseComparison();
