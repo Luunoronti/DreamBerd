@@ -503,6 +503,9 @@ namespace DreamberdInterpreter
                 case BinaryOperator.Divide:
                     return EvaluateDivide(left, right, binary.Left.Position, binary.Right.Position);
 
+                case BinaryOperator.SingleEqual:
+                    return Value.FromBoolean(left.UltraLooseEquals(right));
+
                 case BinaryOperator.Equal:
                     return Value.FromBoolean(left.VeryLooseEquals(right));
 
@@ -611,10 +614,10 @@ namespace DreamberdInterpreter
             Value targetVal = EvaluateExpression(ia.Target);
 
             if (targetVal.Kind != ValueKind.Array || targetVal.Array == null)
-                throw new InterpreterException("Index assignment is only supported on arrays.", ia.Position);
+                throw new InterpreterException("Index assignment is only supported on arrays.", idxAssign.Position);
 
             Value indexVal = EvaluateExpression(ia.Index);
-            double index = ToNumberAt(indexVal, ia.Index.Position);
+            double index = ToNumberAt(indexVal, idxAssign.Index.Position);
 
             var dict = new Dictionary<double, Value>(targetVal.Array);
             Value newValue = EvaluateExpression(ia.ValueExpression);

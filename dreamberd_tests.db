@@ -66,6 +66,21 @@ assertEq("division by zero => undefined", undefined, 1 / 0)!
 print("")!
 
 // --------------------------------------------
+
+print("")!
+
+// --------------------------------------------
+// 1b) Najluźniejsza równość '=' (round)
+// --------------------------------------------
+assertTrue("3 = 3.14 -> true (round)", 3 = 3.14)!
+assertTrue("3 = 2.6 -> true (round)", 3 = 2.6)!
+assertFalse("3 = 3.6 -> false (round)", 3 = 3.6)!
+assertTrue("3.14 (string) = 3 -> true (string->number + round)", "3.14" = 3)!
+assertTrue("true = 1 -> true", true = 1)!
+assertTrue("false = 0 -> true", false = 0)!
+assertTrue("maybe = 1 -> true (maybe->0.5 rounds up)", maybe = 1)!
+assertFalse("undefined = 0 -> false", undefined = 0)!
+
 // 2) 4-gałęziowy operator warunkowy
 //    cond ? t : f :: m ::: u
 // --------------------------------------------
@@ -177,27 +192,6 @@ var var r = 0!
     r = r + 100!
 }
 assertEq("reverse in block re-runs first stmt only", 2, r)!
-
-
-// --------------------------------------------
-// Overloading / priorytet deklaracji (wielokrotne '!')
-// --------------------------------------------
-
-// Najnowsza deklaracja z tym samym priorytetem wygrywa
-const const ov1 = "Luke"!
-const const ov1 = "Lu"!
-assertEq("overload - newest wins (same priority)", "Lu", ov1)!
-
-// Więcej wykrzykników => wyższy priorytet (nawet jeśli jest starsza)
-const const ov2 = "HighPriority"!!
-const const ov2 = "LowPriority"!
-assertEq("overload - higher priority wins", "HighPriority", ov2)!
-
-// Fallback po wygaśnięciu lifetime (high prio znika -> zostaje low)
-const const ov3<3> = "TEMP"!!
-const const ov3 = "PERSIST"!
-assertEq("overload - before expiry uses TEMP", "TEMP", ov3)!
-assertEq("overload - after expiry falls back to PERSIST", "PERSIST", ov3)!
 
 print("")!
 

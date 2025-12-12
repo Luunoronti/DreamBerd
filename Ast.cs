@@ -15,6 +15,7 @@ namespace DreamberdInterpreter
         Subtract,
         Multiply,
         Divide,
+        SingleEqual, // '='
         Equal,        // '=='
         DoubleEqual,  // '==='
         TripleEqual,  // '===='

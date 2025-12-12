@@ -17,12 +17,10 @@ namespace DreamberdInterpreter
             {
                 get;
             }
-
             public int DeclarationIndex
             {
                 get;
             }
-
             public DateTime CreatedAtUtc
             {
                 get;
@@ -40,35 +38,22 @@ namespace DreamberdInterpreter
         {
             public Mutability Mutability = Mutability.VarVar;
             public int Priority;
-            public int DeclaredAtStatementIndex;
             public Value CurrentValue;
             public VariableHistory History = new();
             public LifetimeInfo? Lifetime;
         }
 
-        /// <summary>
-        /// W obrębie jednego scope'a możemy mieć wiele deklaracji tej samej zmiennej (overloading).
-        /// Aktywna deklaracja wybierana jest wg:
-        /// 1) najwyższy Priority (liczba '!'),
-        /// 2) jeśli remis: najbardziej świeża deklaracja (DeclaredAtStatementIndex),
-        /// 3) jeśli nadal remis: ostatnia na liście.
-        /// </summary>
-        private sealed class OverloadSet
-        {
-            public List<Entry> Entries = new();
-        }
-
-        private readonly List<Dictionary<string, OverloadSet>> _scopes =
+        private readonly List<Dictionary<string, Entry>> _scopes =
             new()
             {
-                new Dictionary<string, OverloadSet>(StringComparer.Ordinal)
+                new Dictionary<string, Entry>(StringComparer.Ordinal)
             };
 
-        private Dictionary<string, OverloadSet> CurrentScope => _scopes[_scopes.Count - 1];
+        private Dictionary<string, Entry> CurrentScope => _scopes[_scopes.Count - 1];
 
         public void PushScope()
         {
-            _scopes.Add(new Dictionary<string, OverloadSet>(StringComparer.Ordinal));
+            _scopes.Add(new Dictionary<string, Entry>(StringComparer.Ordinal));
         }
 
         public void PopScope()
@@ -79,61 +64,25 @@ namespace DreamberdInterpreter
             _scopes.RemoveAt(_scopes.Count - 1);
         }
 
-        private bool TryFindSet(string name, out OverloadSet set, out Dictionary<string, OverloadSet> scope)
+        private bool TryFindEntry(string name, out Entry entry, out Dictionary<string, Entry> scope)
         {
             for (int i = _scopes.Count - 1; i >= 0; i--)
             {
-                var sc = _scopes[i];
-                if (sc.TryGetValue(name, out var found))
+                var dict = _scopes[i];
+                if (dict.TryGetValue(name, out entry))
                 {
-                    set = found;
-                    scope = sc;
+                    scope = dict;
                     return true;
                 }
             }
 
-            set = null!;
+            entry = null!;
             scope = null!;
             return false;
         }
 
-        private static Entry? SelectActive(OverloadSet set)
-        {
-            if (set.Entries.Count == 0)
-                return null;
-
-            Entry best = set.Entries[0];
-
-            for (int i = 1; i < set.Entries.Count; i++)
-            {
-                var e = set.Entries[i];
-
-                if (e.Priority > best.Priority)
-                {
-                    best = e;
-                    continue;
-                }
-
-                if (e.Priority == best.Priority)
-                {
-                    if (e.DeclaredAtStatementIndex > best.DeclaredAtStatementIndex)
-                    {
-                        best = e;
-                        continue;
-                    }
-
-                    if (e.DeclaredAtStatementIndex == best.DeclaredAtStatementIndex)
-                    {
-                        // w praktyce to się raczej nie zdarzy, ale dla pewności:
-                        best = e;
-                    }
-                }
-            }
-
-            return best;
-        }
-
-        public void Declare(
+        private const int MaxHistory = 100;
+public void Declare(
             string name,
             Mutability mutability,
             Value initialValue,
@@ -142,24 +91,24 @@ namespace DreamberdInterpreter
             int declarationIndex)
         {
             if (name == null) throw new ArgumentNullException(nameof(name));
-            if (priority <= 0) priority = 1; // sanity: pojedyncze '!' == 1
 
             // Deklaracje trafiają do bieżącego scope'a (blokowego).
-            // Pozwalamy na shadowing nazw z parent scope'ów.
+            // Pozwalamy na "shadowing" nazw z parent scope'ów.
             var scope = CurrentScope;
 
-            if (!scope.TryGetValue(name, out var set))
+            if (scope.TryGetValue(name, out var existing))
             {
-                set = new OverloadSet();
-                scope[name] = set;
+                // Priorytet działa tylko w obrębie tego samego scope'a.
+                if (priority < existing.Priority)
+                    return;
             }
 
             var entry = new Entry
             {
                 Mutability = mutability,
                 Priority = priority,
-                DeclaredAtStatementIndex = declarationIndex,
-                CurrentValue = initialValue
+                CurrentValue = initialValue,
+                History = new VariableHistory()
             };
 
             entry.History.Values.Add(initialValue);
@@ -170,31 +119,35 @@ namespace DreamberdInterpreter
                 entry.Lifetime = new LifetimeInfo(lifetime, declarationIndex, DateTime.UtcNow);
             }
 
-            set.Entries.Add(entry);
+            scope[name] = entry;
         }
 
-        public bool TryGet(string name, out Value value)
+
+public bool TryGet(string name, out Value value)
         {
+            if (TryFindEntry(name, out var entry, out _))
+            {
+                value = entry.CurrentValue;
+                return true;
+            }
+
             value = default;
-
-            if (!TryFindSet(name, out var set, out _))
-                return false;
-
-            var active = SelectActive(set);
-            if (active == null)
-                return false;
-
-            value = active.CurrentValue;
-            return true;
+            return false;
         }
 
-        public void Assign(string name, Value newValue, int statementIndex)
-        {
-            if (!TryFindSet(name, out var set, out _))
-                throw new InterpreterException($"Variable '{name}' is not defined.");
 
-            var entry = SelectActive(set);
-            if (entry == null)
+public Value Get(string name)
+        {
+            if (TryFindEntry(name, out var entry, out _))
+                return entry.CurrentValue;
+
+            throw new InterpreterException($"Variable '{name}' is not defined.");
+        }
+
+
+public void Assign(string name, Value newValue, int statementIndex)
+        {
+            if (!TryFindEntry(name, out var entry, out _))
                 throw new InterpreterException($"Variable '{name}' is not defined.");
 
             if (entry.Mutability == Mutability.ConstConst ||
@@ -207,118 +160,92 @@ namespace DreamberdInterpreter
             UpdateHistory(entry, newValue);
         }
 
-        public void Delete(string name)
+
+public void Delete(string name)
         {
-            if (TryFindSet(name, out _, out var scope))
+            if (TryFindEntry(name, out _, out var scope))
             {
                 scope.Remove(name);
             }
         }
 
-        public void ExpireLifetimes(int currentStatementIndex, DateTime nowUtc)
+
+public void ExpireLifetimes(int currentStatementIndex, DateTime nowUtc)
         {
-            // Usuwamy wygasłe overloady, a jeśli set jest pusty, usuwamy całą nazwę.
+            var toRemove = new List<(Dictionary<string, Entry> Scope, string Name)>();
+
+            // Sprawdzamy wszystkie scope'y (od globalnego po najgłębszy).
             foreach (var scope in _scopes)
             {
-                // Musimy zbierać klucze do usunięcia, bo nie wolno modyfikować dict podczas foreach.
-                List<string>? namesToRemove = null;
-
                 foreach (var pair in scope)
                 {
-                    var set = pair.Value;
-                    if (set.Entries.Count == 0)
+                    string name = pair.Key;
+                    var entry = pair.Value;
+
+                    if (!entry.Lifetime.HasValue)
                         continue;
 
-                    // Czyścimy z tyłu (bezpiecznie usuwać elementy listy).
-                    for (int i = set.Entries.Count - 1; i >= 0; i--)
+                    var info = entry.Lifetime.Value;
+                    var lifetime = info.Lifetime;
+
+                    switch (lifetime.Kind)
                     {
-                        var entry = set.Entries[i];
-                        if (!entry.Lifetime.HasValue)
-                            continue;
+                        case LifetimeKind.None:
+                            break;
 
-                        var info = entry.Lifetime.Value;
-                        var lifetime = info.Lifetime;
+                        case LifetimeKind.Infinite:
+                            break;
 
-                        bool expired = false;
-
-                        switch (lifetime.Kind)
-                        {
-                            case LifetimeKind.None:
-                                expired = false;
+                        case LifetimeKind.StatementCount:
+                            {
+                                int age = currentStatementIndex - info.DeclarationIndex;
+                                if (age >= lifetime.StatementCount)
+                                    toRemove.Add((scope, name));
                                 break;
+                            }
 
-                            case LifetimeKind.Infinity:
-                                expired = false;
+                        case LifetimeKind.TimeSpan:
+                            {
+                                var age = nowUtc - info.CreatedAtUtc;
+                                if (age >= lifetime.Duration)
+                                    toRemove.Add((scope, name));
                                 break;
+                            }
 
-                            case LifetimeKind.Lines:
-                                {
-                                    double age = currentStatementIndex - info.DeclarationIndex;
-                                    if (age >= lifetime.Value)
-                                        expired = true;
-                                    break;
-                                }
-
-                            case LifetimeKind.Seconds:
-                                {
-                                    var age = nowUtc - info.CreatedAtUtc;
-                                    if (age >= TimeSpan.FromSeconds(lifetime.Value))
-                                        expired = true;
-                                    break;
-                                }
-
-                            default:
-                                throw new InterpreterException($"Unknown lifetime kind: {lifetime.Kind}");
-                        }
-
-                        if (expired)
-                        {
-                            set.Entries.RemoveAt(i);
-                        }
-                    }
-
-                    if (set.Entries.Count == 0)
-                    {
-                        namesToRemove ??= new List<string>();
-                        namesToRemove.Add(pair.Key);
+                        default:
+                            throw new InterpreterException($"Unknown lifetime kind: {lifetime.Kind}");
                     }
                 }
+            }
 
-                if (namesToRemove != null)
-                {
-                    foreach (var name in namesToRemove)
-                        scope.Remove(name);
-                }
+            foreach (var (scope, name) in toRemove)
+            {
+                scope.Remove(name);
             }
         }
 
-        public bool TryGetHistory(string name, out List<Value> values, out int currentIndex)
+
+public bool TryGetHistory(string name, out IReadOnlyList<Value> values, out int currentIndex)
         {
-            values = new List<Value>();
-            currentIndex = 0;
+            if (TryFindEntry(name, out var entry, out _))
+            {
+                values = entry.History.Values;
+                currentIndex = entry.History.Index;
+                return true;
+            }
 
-            if (!TryFindSet(name, out var set, out _))
-                return false;
-
-            var entry = SelectActive(set);
-            if (entry == null)
-                return false;
-
-            values = entry.History.Values;
-            currentIndex = entry.History.Index;
-            return true;
+            values = Array.Empty<Value>();
+            currentIndex = -1;
+            return false;
         }
 
-        public bool TryPrevious(string name, out Value newValue, out bool changed)
+
+public bool TryPrevious(string name, out Value newValue, out bool changed)
         {
             newValue = default;
             changed = false;
 
-            if (!TryFindSet(name, out var set, out _))
-                return false;
-
-            var entry = SelectActive(set);
-            if (entry == null)
+            if (!TryFindEntry(name, out var entry, out _))
                 return false;
 
             var hist = entry.History;
@@ -329,31 +256,24 @@ namespace DreamberdInterpreter
             {
                 newValue = hist.Values[0];
                 changed = false;
+                entry.CurrentValue = newValue;
                 return true;
             }
 
             hist.Index--;
             newValue = hist.Values[hist.Index];
-
-            if (!entry.CurrentValue.StrictEquals(newValue))
-            {
-                entry.CurrentValue = newValue;
-                changed = true;
-            }
-
+            changed = true;
+            entry.CurrentValue = newValue;
             return true;
         }
 
-        public bool TryNext(string name, out Value newValue, out bool changed)
+
+public bool TryNext(string name, out Value newValue, out bool changed)
         {
             newValue = default;
             changed = false;
 
-            if (!TryFindSet(name, out var set, out _))
-                return false;
-
-            var entry = SelectActive(set);
-            if (entry == null)
+            if (!TryFindEntry(name, out var entry, out _))
                 return false;
 
             var hist = entry.History;
@@ -364,24 +284,22 @@ namespace DreamberdInterpreter
             {
                 newValue = hist.Values[hist.Values.Count - 1];
                 changed = false;
+                entry.CurrentValue = newValue;
                 return true;
             }
 
             hist.Index++;
             newValue = hist.Values[hist.Index];
-
-            if (!entry.CurrentValue.StrictEquals(newValue))
-            {
-                entry.CurrentValue = newValue;
-                changed = true;
-            }
-
+            changed = true;
+            entry.CurrentValue = newValue;
             return true;
         }
 
-        private static void UpdateHistory(Entry entry, Value newValue)
+
+private void UpdateHistory(Entry entry, Value newValue)
         {
-            var hist = entry.History;
+            var hist = entry.History ??= new VariableHistory();
+
             if (hist.Values.Count == 0)
             {
                 hist.Values.Add(newValue);
@@ -401,6 +319,13 @@ namespace DreamberdInterpreter
 
             hist.Values.Add(newValue);
             hist.Index = hist.Values.Count - 1;
+
+            if (hist.Values.Count > MaxHistory)
+            {
+                hist.Values.RemoveAt(0);
+                hist.Index--;
+                if (hist.Index < 0) hist.Index = 0;
+            }
         }
     }
 }

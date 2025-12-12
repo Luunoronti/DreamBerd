@@ -180,6 +180,57 @@ namespace DreamberdInterpreter
             return string.Equals(ToString(), other.ToString(), StringComparison.Ordinal);
         }
 
+        public bool UltraLooseEquals(Value other)
+        {
+            // Najluźniejsza równość '='.
+            // Najpierw próbujemy porównać liczby po zaokrągleniu (Round).
+            // Przykład ze specyfikacji: 3 = 3.14  -> true (oba roundują do 3).
+            if (TryToUltraLooseNumber(this, out double a) && TryToUltraLooseNumber(other, out double b))
+            {
+                long ra = (long)Math.Round(a, MidpointRounding.AwayFromZero);
+                long rb = (long)Math.Round(b, MidpointRounding.AwayFromZero);
+                return ra == rb;
+            }
+
+            // Fallback: porównanie tekstowe (żeby np. "Luke" = "Luke" też działało).
+            return string.Equals(ToString(), other.ToString(), StringComparison.Ordinal);
+        }
+
+        private static bool TryToUltraLooseNumber(Value v, out double number)
+        {
+            switch (v.Kind)
+            {
+                case ValueKind.Number:
+                    number = v.Number;
+                    return true;
+
+                case ValueKind.Boolean:
+                    number = v.Bool switch
+                    {
+                        BooleanState.True => 1.0,
+                        BooleanState.False => 0.0,
+                        BooleanState.Maybe => 0.5,
+                        _ => 0.0
+                    };
+                    return true;
+
+                case ValueKind.Null:
+                    number = 0.0;
+                    return true;
+
+                case ValueKind.String:
+                    if (double.TryParse(v.String ?? string.Empty, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
+                        return true;
+
+                    number = 0.0;
+                    return false;
+
+                default:
+                    number = 0.0;
+                    return false;
+            }
+        }
+
         public override string ToString()
         {
             return Kind switch

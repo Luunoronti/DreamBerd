@@ -175,59 +175,14 @@ namespace DreamberdInterpreter
             return new BlockStatement(statements, position);
         }
 
-        private readonly struct TerminatorInfo
+        private bool ParseTerminatorIsDebug()
         {
-            public bool IsDebug
-            {
-                get;
-            }
-
-            /// <summary>
-            /// Liczba wykrzykników na końcu statementu.
-            /// Dla terminatora '?' wartość wynosi 0.
-            /// </summary>
-            public int ExclamationCount
-            {
-                get;
-            }
-
-            public TerminatorInfo(bool isDebug, int exclamationCount)
-            {
-                IsDebug = isDebug;
-                ExclamationCount = exclamationCount;
-            }
-        }
-
-        private TerminatorInfo ParseTerminator()
-        {
-            // Gulf of Mexico / DreamBerd: można dać wiele '!' na końcu statementu.
-            // Dla większości statementów to jest tylko "extra"; dla deklaracji zmiennych
-            // ta liczba jest używana jako priorytet deklaracji (overloading).
             if (Match(TokenType.Bang))
-            {
-                int count = 1;
-                while (Match(TokenType.Bang))
-                    count++;
-
-                return new TerminatorInfo(isDebug: false, exclamationCount: count);
-            }
-
+                return false;
             if (Match(TokenType.Question))
-            {
-                // Pozwalamy na wielokrotne '??' jako debug-terminator.
-                while (Match(TokenType.Question))
-                {
-                    // noop
-                }
-
-                return new TerminatorInfo(isDebug: true, exclamationCount: 0);
-            }
-
+                return true;
             throw new InterpreterException("Expected '!' or '?' at end of statement.", Peek().Position);
         }
-
-        private bool ParseTerminatorIsDebug() => ParseTerminator().IsDebug;
-
 
         private Statement ParseFunctionDeclaration()
         {
@@ -342,11 +297,10 @@ namespace DreamberdInterpreter
 
             Consume(TokenType.Assign, "Expected '=' after variable name.");
             Expression initializer = ParseExpression();
+            bool isDebug = ParseTerminatorIsDebug(); // ignored
+            _ = isDebug;
 
-            // Liczba wykrzykników determinuje priorytet deklaracji (overloading).
-            // '?' (debug) traktujemy jak zwykły terminator z domyślnym priorytetem 1.
-            var term = ParseTerminator();
-            int priority = term.IsDebug ? 1 : term.ExclamationCount;
+            int priority = 0;
 
             return new VariableDeclarationStatement(declKind, mutability, name, lifetime, priority, initializer, position);
         }
@@ -436,61 +390,56 @@ namespace DreamberdInterpreter
 
         private Expression ParseAssignment()
         {
-            Expression expr = ParseEquality();
+            // Uwaga: w DreamBerd pojedyncze '=' może być zarówno przypisaniem,
+            // jak i "najluźniejszą równością" (patrz README Gulf of Mexico).
+            // Rozróżniamy to tak:
+            // - jeżeli lewa strona jest l-wartością (identyfikator / indeks) -> assignment
+            // - w przeciwnym razie -> operator równości '=' (BinaryOperator.SingleEqual)
+            Expression expr = ParseEquality(allowSingleEqual: false);
 
             if (Match(TokenType.Assign))
             {
-                Expression value = ParseAssignment();
+                int pos = Previous().Position;
 
                 if (expr is IdentifierExpression ident)
                 {
+                    Expression value = ParseAssignment();
                     return new AssignmentExpression(ident.Name, value, ident.Position);
                 }
 
                 if (expr is IndexExpression idx)
                 {
+                    Expression value = ParseAssignment();
                     return new IndexAssignmentExpression(idx.Target, idx.Index, value, idx.Position);
                 }
 
-                // Błąd najlepiej przypiąć do tokenu '=' (Previous()), bo to on zaczyna assignment.
-                throw new InterpreterException("Invalid assignment target.", Previous().Position);
+                // Nie da się przypisać -> traktujemy '=' jako "najluźniejszą równość"
+                Expression right = ParseComparison();
+                Expression eq = new BinaryExpression(expr, BinaryOperator.SingleEqual, right, pos);
+                return ParseEqualityRest(eq, allowSingleEqual: true);
             }
 
-            // cztero-gałęziowy operator warunkowy:
-            // cond ? t : f :: m ::: u
-            if (Match(TokenType.Question))
-            {
-                int qPos = Previous().Position;
-
-                Expression whenTrue = ParseAssignment();
-
-                Consume(TokenType.Colon, "Expected ':' after true branch of conditional expression.");
-                Expression whenFalse = ParseAssignment();
-
-                // '::'
-                Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
-                Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
-                Expression whenMaybe = ParseAssignment();
-
-                // ':::'
-                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
-                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
-                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
-                Expression whenUndefined = ParseAssignment();
-
-                return new ConditionalExpression(expr, whenTrue, whenFalse, whenMaybe, whenUndefined, qPos);
-            }
-
-            return expr;
+            // Brak '=' do przypisania: dopinamy ewentualne operatory równości, w tym pojedyncze '='.
+            return ParseEqualityRest(expr, allowSingleEqual: true);
         }
 
-        private Expression ParseEquality()
+        private Expression ParseEquality(bool allowSingleEqual)
         {
             Expression expr = ParseComparison();
+            return ParseEqualityRest(expr, allowSingleEqual);
+        }
 
+        private Expression ParseEqualityRest(Expression expr, bool allowSingleEqual)
+        {
             while (true)
             {
-                if (Match(TokenType.Equal))
+                if (allowSingleEqual && Match(TokenType.Assign))
+                {
+                    int pos = Previous().Position;
+                    Expression right = ParseComparison();
+                    expr = new BinaryExpression(expr, BinaryOperator.SingleEqual, right, pos);
+                }
+                else if (Match(TokenType.Equal))
                 {
                     int pos = Previous().Position;
                     Expression right = ParseComparison();
