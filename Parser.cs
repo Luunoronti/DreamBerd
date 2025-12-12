@@ -90,6 +90,11 @@ namespace DreamberdInterpreter
                 return ParseIfStatement();
             }
 
+            if (Match(TokenType.Return))
+            {
+                return ParseReturnStatementAfterKeyword();
+            }
+
             if (IsFunctionKeyword())
             {
                 return ParseFunctionDeclaration();
@@ -176,10 +181,40 @@ namespace DreamberdInterpreter
             Consume(TokenType.RightParen, "Expected ')' after function parameters.");
             Consume(TokenType.Arrow, "Expected '=>' after function parameter list.");
 
-            Expression bodyExpr = ParseExpression();
+            // body: albo expression (stary styl), albo blok { ... }
+            Statement bodyStmt;
+            if (Match(TokenType.LeftBrace))
+            {
+                bodyStmt = ParseBlockStatementAfterOpeningBrace();
+            }
+            else
+            {
+                // Dla kompatybilności: function f(x) => expr!
+                // zachowuje się jak "return expr".
+                Expression bodyExpr = ParseExpression();
+                bodyStmt = new ReturnStatement(bodyExpr);
+            }
+
             bool isDebug = ParseTerminatorIsDebug(); // na razie ignorujemy isDebug
 
-            return new FunctionDeclarationStatement(name, parameters, bodyExpr);
+            return new FunctionDeclarationStatement(name, parameters, bodyStmt);
+        }
+
+        private Statement ParseReturnStatementAfterKeyword()
+        {
+            // return!
+            // return expr!
+            Expression? expr = null;
+
+            if (!Check(TokenType.Bang) && !Check(TokenType.Question))
+            {
+                expr = ParseExpression();
+            }
+
+            bool isDebug = ParseTerminatorIsDebug(); // ignorujemy – return nie ma debug-print
+            _ = isDebug;
+
+            return new ReturnStatement(expr);
         }
 
         private Statement ParseVariableDeclaration()

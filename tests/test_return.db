@@ -1,0 +1,32 @@
+// Test: return + blocks in functions
+// Run: DreamBerd.exe test_return.db
+
+print("== expression-body function still works ==")!
+function add(a, b) => a + b!
+print("add(2, 3) = " + add(2, 3))!
+
+print("== block-body function + return ==")!
+function fact(n) => {
+    if (n == 0) return 1!
+    return n * fact(n - 1)!
+}!
+print("fact(5) = " + fact(5))!
+
+print("== return without expression -> undefined ==")!
+function noRet() => {
+    return!
+}!
+print("noRet() = " + noRet())!
+
+print("== return nested inside blocks ==")!
+function nested(x) => {
+    if (x) {
+        { { return 123! } }
+    }
+    return 999!
+}!
+print("nested(true) = " + nested(true))!
+print("nested(false) = " + nested(false))!
+
+// (optional) should error (return outside function):
+// return 123!

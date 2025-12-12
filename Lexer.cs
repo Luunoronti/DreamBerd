@@ -250,6 +250,7 @@ namespace DreamberdInterpreter
                 "when" => TokenType.When,
                 "if" => TokenType.If,
                 "else" => TokenType.Else,
+                "return" => TokenType.Return,
                 _ => TokenType.Identifier
             };
 

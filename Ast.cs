@@ -166,6 +166,25 @@ namespace DreamberdInterpreter
         }
     }
 
+    /// <summary>
+    /// return expr!
+    /// return!
+    ///
+    /// Zwraca wartość z funkcji. Poza funkcją to błąd.
+    /// </summary>
+    public sealed class ReturnStatement : Statement
+    {
+        public Expression? Expression
+        {
+            get;
+        }
+
+        public ReturnStatement(Expression? expression)
+        {
+            Expression = expression;
+        }
+    }
+
     public sealed class FunctionDeclarationStatement : Statement
     {
         public string Name
@@ -176,12 +195,12 @@ namespace DreamberdInterpreter
         {
             get;
         }
-        public Expression Body
+        public Statement Body
         {
             get;
         }
 
-        public FunctionDeclarationStatement(string name, IReadOnlyList<string> parameters, Expression body)
+        public FunctionDeclarationStatement(string name, IReadOnlyList<string> parameters, Statement body)
         {
             Name = name ?? throw new ArgumentNullException(nameof(name));
             Parameters = parameters ?? throw new ArgumentNullException(nameof(parameters));

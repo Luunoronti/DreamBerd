@@ -39,15 +39,32 @@ namespace DreamberdInterpreter
             {
                 get;
             }
-            public Expression Body
+            public Statement Body
             {
                 get;
             }
 
-            public FunctionDefinition(IReadOnlyList<string> parameters, Expression body)
+            public FunctionDefinition(IReadOnlyList<string> parameters, Statement body)
             {
                 Parameters = parameters ?? throw new ArgumentNullException(nameof(parameters));
                 Body = body ?? throw new ArgumentNullException(nameof(body));
+            }
+        }
+
+        /// <summary>
+        /// Wewnętrzny "sygnał" return z funkcji.
+        /// Dzięki temu return może przerwać wykonanie dowolnie zagnieżdżonego bloku.
+        /// </summary>
+        private sealed class ReturnSignal : Exception
+        {
+            public Value Value
+            {
+                get;
+            }
+
+            public ReturnSignal(Value value)
+            {
+                Value = value;
             }
         }
 
@@ -229,6 +246,19 @@ namespace DreamberdInterpreter
                     {
                         _whenSubscriptions.Add(new WhenSubscription(ws.Condition, ws.Body));
                         return Value.Null;
+                    }
+
+                case ReturnStatement rs:
+                    {
+                        // return jest dozwolony tylko wewnątrz wywołania funkcji.
+                        if (_callStack.Count == 0)
+                            throw new InterpreterException("return can only be used inside a function.");
+
+                        Value value = rs.Expression != null
+                            ? EvaluateExpression(rs.Expression)
+                            : Value.Undefined;
+
+                        throw new ReturnSignal(value);
                     }
 
                 case FunctionDeclarationStatement fds:
@@ -623,8 +653,17 @@ namespace DreamberdInterpreter
             _callStack.Push(frame);
             try
             {
-                Value result = EvaluateExpression(def.Body);
-                return result;
+                try
+                {
+                    // Wykonujemy ciało funkcji (może być ReturnStatement albo blok { ... }).
+                    // Jeśli nie ma return, zwracamy undefined.
+                    EvaluateStatement(def.Body);
+                    return Value.Undefined;
+                }
+                catch (ReturnSignal rs)
+                {
+                    return rs.Value;
+                }
             }
             finally
             {

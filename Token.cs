@@ -16,6 +16,7 @@ namespace DreamberdInterpreter
         When,
         If,
         Else,
+        Return,
 
         LeftParen,
         RightParen,
