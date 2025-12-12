@@ -14,7 +14,8 @@ var var password = 0!
 var var steps = 0!
 
 // Every time the dial *ends up* on 0, Santa gains +1 to security.
-when (dial ==== 0) {
+when (dial ==== 0) 
+{
     password = password + 1!
     if (VERBOSE) print("🔐 *click* dial=0  password=" + password)!
 }

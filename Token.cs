@@ -31,7 +31,8 @@ namespace DreamberdInterpreter
         Colon,
 
         Bang,
-        Question,
+        Question,          // statement debug terminator '?'
+        QuestionOp,        // conditional operator '?'
 
         Plus,
         Minus,

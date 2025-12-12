@@ -458,7 +458,7 @@ namespace DreamberdInterpreter
 
             // cztero-gałęziowy operator warunkowy:
             // cond ? t : f :: m ::: u
-            if (Match(TokenType.Question))
+            if (Match(TokenType.QuestionOp))
             {
                 int qPos = Previous().Position;
 

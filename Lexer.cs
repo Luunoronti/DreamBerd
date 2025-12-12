@@ -42,7 +42,38 @@ namespace DreamberdInterpreter
 
         private char PeekNext() => (_current + 1 >= _source.Length) ? '\0' : _source[_current + 1];
 
-        private bool Match(char expected)
+        
+private bool IsQuestionTerminator()
+{
+    // We're currently just after '?' (because ScanToken() already advanced).
+    // If the next non-space char is newline, EOF, '}', or a line comment, treat '?' as a statement terminator.
+    int i = _current;
+    while (i < _source.Length)
+    {
+        char c = _source[i];
+        if (c == ' ' || c == '\t')
+        {
+            i++;
+            continue;
+        }
+
+        if (c == '\r' || c == '\n')
+            return true;
+
+        if (c == '}')
+            return true;
+
+        if (c == '/' && (i + 1) < _source.Length && _source[i + 1] == '/')
+            return true;
+
+        return false;
+    }
+
+    // EOF
+    return true;
+}
+
+private bool Match(char expected)
         {
             if (IsAtEnd()) return false;
             if (_source[_current] != expected) return false;
@@ -123,7 +154,9 @@ namespace DreamberdInterpreter
                     AddToken(TokenType.Bang);
                     break;
                 case '?':
-                    AddToken(TokenType.Question);
+                    // Disambiguation: '?' at end-of-line / before '}' / before '//' is a debug terminator.
+                    // Otherwise it is the conditional operator token.
+                    AddToken(IsQuestionTerminator() ? TokenType.Question : TokenType.QuestionOp);
                     break;
                 case '+':
                     AddToken(TokenType.Plus);
