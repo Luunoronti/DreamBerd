@@ -213,7 +213,17 @@ namespace DreamberdInterpreter
             {
                 case BlockStatement bs:
                     {
-                        ExecuteStatementList(bs.Statements);
+                        // Blok { ... } tworzy nowy scope zmiennych.
+                        _variables.PushScope();
+                        try
+                        {
+                            ExecuteStatementList(bs.Statements);
+                        }
+                        finally
+                        {
+                            _variables.PopScope();
+                        }
+
                         return Value.Null;
                     }
 

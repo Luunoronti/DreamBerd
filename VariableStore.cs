@@ -43,12 +43,47 @@ namespace DreamberdInterpreter
             public LifetimeInfo? Lifetime;
         }
 
-        private readonly Dictionary<string, Entry> _entries =
-            new(StringComparer.Ordinal);
+        private readonly List<Dictionary<string, Entry>> _scopes =
+            new()
+            {
+                new Dictionary<string, Entry>(StringComparer.Ordinal)
+            };
+
+        private Dictionary<string, Entry> CurrentScope => _scopes[_scopes.Count - 1];
+
+        public void PushScope()
+        {
+            _scopes.Add(new Dictionary<string, Entry>(StringComparer.Ordinal));
+        }
+
+        public void PopScope()
+        {
+            if (_scopes.Count <= 1)
+                throw new InvalidOperationException("Cannot pop the global scope.");
+
+            _scopes.RemoveAt(_scopes.Count - 1);
+        }
+
+        private bool TryFindEntry(string name, out Entry? entry, out Dictionary<string, Entry>? scope)
+        {
+            for (int i = _scopes.Count - 1; i >= 0; i--)
+            {
+                var dict = _scopes[i];
+                if (dict.TryGetValue(name, out var found))
+                {
+                    entry = found;
+                    scope = dict;
+                    return true;
+                }
+            }
+
+            entry = null;
+            scope = null;
+            return false;
+        }
 
         private const int MaxHistory = 100;
-
-        public void Declare(
+public void Declare(
             string name,
             Mutability mutability,
             Value initialValue,
@@ -58,8 +93,13 @@ namespace DreamberdInterpreter
         {
             if (name == null) throw new ArgumentNullException(nameof(name));
 
-            if (_entries.TryGetValue(name, out var existing))
+            // Deklaracje trafiają do bieżącego scope'a (blokowego).
+            // Pozwalamy na "shadowing" nazw z parent scope'ów.
+            var scope = CurrentScope;
+
+            if (scope.TryGetValue(name, out var existing))
             {
+                // Priorytet działa tylko w obrębie tego samego scope'a.
                 if (priority < existing.Priority)
                     return;
             }
@@ -80,14 +120,15 @@ namespace DreamberdInterpreter
                 entry.Lifetime = new LifetimeInfo(lifetime, declarationIndex, DateTime.UtcNow);
             }
 
-            _entries[name] = entry;
+            scope[name] = entry;
         }
 
-        public bool TryGet(string name, out Value value)
+
+	public bool TryGet(string name, out Value value)
         {
-            if (_entries.TryGetValue(name, out var entry))
+            if (TryFindEntry(name, out var entry, out _))
             {
-                value = entry.CurrentValue;
+                value = entry!.CurrentValue;
                 return true;
             }
 
@@ -95,18 +136,22 @@ namespace DreamberdInterpreter
             return false;
         }
 
-        public Value Get(string name)
-        {
-            if (!_entries.TryGetValue(name, out var entry))
-                throw new InterpreterException($"Variable '{name}' is not defined.");
 
-            return entry.CurrentValue;
+public Value Get(string name)
+        {
+            if (TryFindEntry(name, out var entry, out _))
+                return entry!.CurrentValue;
+
+            throw new InterpreterException($"Variable '{name}' is not defined.");
         }
 
-        public void Assign(string name, Value newValue, int statementIndex)
+
+public void Assign(string name, Value newValue, int statementIndex)
         {
-            if (!_entries.TryGetValue(name, out var entry))
+            if (!TryFindEntry(name, out var entry, out _) || entry == null)
                 throw new InterpreterException($"Variable '{name}' is not defined.");
+
+            //entry = entry!;
 
             if (entry.Mutability == Mutability.ConstConst ||
                 entry.Mutability == Mutability.ConstVar)
@@ -118,73 +163,79 @@ namespace DreamberdInterpreter
             UpdateHistory(entry, newValue);
         }
 
-        public void Delete(string name)
+
+public void Delete(string name)
         {
-            _entries.Remove(name);
+            if (TryFindEntry(name, out _, out var scope))
+            {
+                scope!.Remove(name);
+            }
         }
 
-        public void ExpireLifetimes(int currentStatementIndex, DateTime nowUtc)
+
+public void ExpireLifetimes(int currentStatementIndex, DateTime nowUtc)
         {
-            var toRemove = new List<string>();
+            var toRemove = new List<(Dictionary<string, Entry> Scope, string Name)>();
 
-            foreach (var pair in _entries)
+            // Sprawdzamy wszystkie scope'y (od globalnego po najgłębszy).
+            foreach (var scope in _scopes)
             {
-                string name = pair.Key;
-                var entry = pair.Value;
-
-                if (!entry.Lifetime.HasValue)
-                    continue;
-
-                var info = entry.Lifetime.Value;
-                var lifetime = info.Lifetime;
-
-                switch (lifetime.Kind)
+                foreach (var pair in scope)
                 {
-                    case LifetimeKind.Lines:
-                        {
-                            if (lifetime.Value > 0)
-                            {
-                                int lines = (int)lifetime.Value;
-                                int lastIndex = info.DeclarationIndex + lines - 1;
-                                if (currentStatementIndex > lastIndex)
-                                    toRemove.Add(name);
-                            }
-                            break;
-                        }
+                    string name = pair.Key;
+                    var entry = pair.Value;
 
-                    case LifetimeKind.Seconds:
-                        {
-                            if (lifetime.Value > 0)
-                            {
-                                double secs = lifetime.Value;
-                                double elapsed = (nowUtc - info.CreatedAtUtc).TotalSeconds;
-                                if (elapsed > secs)
-                                    toRemove.Add(name);
-                            }
-                            break;
-                        }
+                    if (!entry.Lifetime.HasValue)
+                        continue;
 
-                    case LifetimeKind.Infinity:
-                    case LifetimeKind.None:
-                    default:
-                        break;
+                    var info = entry.Lifetime.Value;
+                    var lifetime = info.Lifetime;
+
+                    switch (lifetime.Kind)
+                    {
+                        case LifetimeKind.None:
+                            break;
+
+                        case LifetimeKind.Infinity:
+                            break;
+
+                        // <N> (linie / statementy)
+                        case LifetimeKind.Lines:
+                            {
+                                int age = currentStatementIndex - info.DeclarationIndex;
+                                if (age >= lifetime.Value)
+                                    toRemove.Add((scope, name));
+                                break;
+                            }
+
+                        // <Ns> (czas)
+                        case LifetimeKind.Seconds:
+                            {
+                                var age = nowUtc - info.CreatedAtUtc;
+                                if (age.TotalSeconds >= lifetime.Value)
+                                    toRemove.Add((scope, name));
+                                break;
+                            }
+
+                        default:
+                            throw new InterpreterException($"Unknown lifetime kind: {lifetime.Kind}");
+                    }
                 }
             }
 
-            foreach (var name in toRemove)
+            foreach (var (scope, name) in toRemove)
             {
-                _entries.Remove(name);
+                scope.Remove(name);
             }
         }
 
-        public bool TryGetHistory(string name, out IReadOnlyList<Value> values, out int currentIndex)
+
+public bool TryGetHistory(string name, out IReadOnlyList<Value> values, out int currentIndex)
         {
-            if (_entries.TryGetValue(name, out var entry) &&
-                entry.History != null &&
-                entry.History.Values.Count > 0)
+            if (TryFindEntry(name, out var entry, out _))
             {
-                values = entry.History.Values;
-                currentIndex = entry.History.Index;
+                values = entry!.History.Values;
+                currentIndex = entry!.History.Index;
                 return true;
             }
 
@@ -193,57 +244,66 @@ namespace DreamberdInterpreter
             return false;
         }
 
-        public bool TryPrevious(string name, out Value newValue, out bool changed)
+
+public bool TryPrevious(string name, out Value newValue, out bool changed)
         {
             newValue = default;
             changed = false;
 
-            if (!_entries.TryGetValue(name, out var entry))
+            if (!TryFindEntry(name, out var entry, out _) || entry==null)
                 return false;
 
+            //entry = entry!;
+
             var hist = entry.History;
-            if (hist == null || hist.Values.Count == 0)
+            if (hist.Values.Count == 0)
                 return false;
 
             if (hist.Index <= 0)
             {
-                newValue = hist.Values[hist.Index];
+                newValue = hist.Values[0];
+                changed = false;
+                entry.CurrentValue = newValue;
                 return true;
             }
 
             hist.Index--;
             newValue = hist.Values[hist.Index];
-            entry.CurrentValue = newValue;
             changed = true;
+            entry.CurrentValue = newValue;
             return true;
         }
 
-        public bool TryNext(string name, out Value newValue, out bool changed)
+
+public bool TryNext(string name, out Value newValue, out bool changed)
         {
             newValue = default;
             changed = false;
 
-            if (!_entries.TryGetValue(name, out var entry))
+            if (!TryFindEntry(name, out var entry, out _) || entry == null)
                 return false;
 
             var hist = entry.History;
-            if (hist == null || hist.Values.Count == 0)
+            if (hist.Values.Count == 0)
                 return false;
 
             if (hist.Index >= hist.Values.Count - 1)
             {
-                newValue = hist.Values[hist.Index];
+                newValue = hist.Values[hist.Values.Count - 1];
+                changed = false;
+                entry.CurrentValue = newValue;
                 return true;
             }
 
             hist.Index++;
             newValue = hist.Values[hist.Index];
-            entry.CurrentValue = newValue;
             changed = true;
+            entry.CurrentValue = newValue;
             return true;
         }
 
-        private void UpdateHistory(Entry entry, Value newValue)
+
+private void UpdateHistory(Entry entry, Value newValue)
         {
             var hist = entry.History ??= new VariableHistory();
 
