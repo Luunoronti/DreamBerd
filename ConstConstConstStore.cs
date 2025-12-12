@@ -1,4 +1,3 @@
-// ConstConstConstStore.cs
 using System;
 using System.Collections.Generic;
 
@@ -12,10 +11,12 @@ namespace DreamberdInterpreter
 
     public sealed class InMemoryConstConstConstStore : IConstConstConstStore
     {
-        private readonly Dictionary<string, Value> _values = new Dictionary<string, Value>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Value> _values =
+            new(StringComparer.Ordinal);
 
         public void Define(string name, Value value)
         {
+            if (name == null) throw new ArgumentNullException(nameof(name));
             _values[name] = value;
         }
 

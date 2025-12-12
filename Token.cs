@@ -1,59 +1,54 @@
 ﻿// Token.cs
-using System;
-
 namespace DreamberdInterpreter
 {
-    public enum TokenKind
+    public enum TokenType
     {
         EndOfFile,
-
         Identifier,
         Number,
         String,
 
         Const,
         Var,
-        True,
-        False,
-        Maybe,
-        Undefined,
-        Delete,
         Reverse,
         Forward,
+        Delete,
         When,
+        If,
+        Else,
 
         LeftParen,
         RightParen,
         LeftBracket,
         RightBracket,
+        LeftBrace,
+        RightBrace,
         Comma,
+        Colon,
+
+        Bang,
+        Question,
 
         Plus,
         Minus,
         Star,
         Slash,
 
-        Equal,
-        DoubleEqual,
-        TripleEqual,
-        QuadEqual,
-
         Less,
-        Greater,
         LessEqual,
+        Greater,
         GreaterEqual,
 
-        Exclamation,
-        InvertedExclamation,
-        Question,
-
-        LeftBrace,
-        RightBrace
+        Arrow,              // '=>'
+        Assign,             // '='
+        Equal,              // '=='
+        EqualEqual,         // '==='
+        EqualEqualEqual     // '===='
     }
 
-    public readonly struct Token
+    public sealed class Token
     {
-        public TokenKind Kind
+        public TokenType Type
         {
             get;
         }
@@ -61,24 +56,23 @@ namespace DreamberdInterpreter
         {
             get;
         }
-        public int Line
+        public object? Literal
         {
             get;
         }
-        public int Column
+        public int Position
         {
             get;
         }
 
-        public Token(TokenKind kind, string lexeme, int line, int column)
+        public Token(TokenType type, string lexeme, object? literal, int position)
         {
-            Kind = kind;
+            Type = type;
             Lexeme = lexeme;
-            Line = line;
-            Column = column;
+            Literal = literal;
+            Position = position;
         }
 
-        public override string ToString() => $"{Kind} '{Lexeme}' ({Line}:{Column})";
+        public override string ToString() => $"{Type} '{Lexeme}'";
     }
-
 }

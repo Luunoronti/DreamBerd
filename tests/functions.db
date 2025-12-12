@@ -1,0 +1,32 @@
+// proste funkcje
+function add(a, b) => a + b!
+func mul(a, b) => a * b!
+
+const const x = add(2, 3)!
+const const y = mul(x, 10)!
+
+print(x)!
+print(y)!
+
+
+// bardzo prymitywna rekursja, np. sumowanie 1..n (jak już dodamy if/?: będzie ładniej)
+function fact(n) => (n == 0)
+    ? 1
+    : n * fact(n - 1)
+    :: 1
+    ::: 1!
+
+
+const const x = 10!
+const const y = fact(x)!
+
+print("fact(" + x + ") = " + y)!
+
+
+function pair(a, b) => [a, b]!
+
+const const p = pair(2, 3)!
+print(p[-1])! // 2
+print(p[0])!  // 3
+
+

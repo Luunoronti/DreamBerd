@@ -1,319 +1,328 @@
-﻿// Parser.cs
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 
 namespace DreamberdInterpreter
 {
-    internal readonly struct TerminatorInfo
-    {
-        public int ExclamationCount
-        {
-            get;
-        }
-        public int InvertedExclamationCount
-        {
-            get;
-        }
-        public bool HasQuestion
-        {
-            get;
-        }
-
-        public TerminatorInfo(int exclamationCount, int invertedExclamationCount, bool hasQuestion)
-        {
-            ExclamationCount = exclamationCount;
-            InvertedExclamationCount = invertedExclamationCount;
-            HasQuestion = hasQuestion;
-        }
-
-        public int Priority => ExclamationCount - InvertedExclamationCount;
-    }
-
     public sealed class Parser
     {
-        private readonly List<Token> _tokens;
-        private int _position;
+        private readonly IReadOnlyList<Token> _tokens;
+        private int _current;
 
-        public Parser(List<Token> tokens)
+        public Parser(IReadOnlyList<Token> tokens)
         {
             _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         }
 
-        public List<Statement> Parse()
+        private bool IsAtEnd() => Peek().Type == TokenType.EndOfFile;
+
+        private Token Peek() => _tokens[_current];
+
+        private Token Previous() => _tokens[_current - 1];
+
+        private Token Advance()
+        {
+            if (!IsAtEnd()) _current++;
+            return Previous();
+        }
+
+        private bool Check(TokenType type)
+        {
+            if (IsAtEnd()) return false;
+            return Peek().Type == type;
+        }
+
+        private bool Match(params TokenType[] types)
+        {
+            foreach (var type in types)
+            {
+                if (Check(type))
+                {
+                    Advance();
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private Token Consume(TokenType type, string message)
+        {
+            if (Check(type)) return Advance();
+            throw new InterpreterException(message + $" Found '{Peek().Lexeme}'.");
+        }
+
+        public List<Statement> ParseProgram()
         {
             var statements = new List<Statement>();
-
             while (!IsAtEnd())
             {
-                if (Check(TokenKind.EndOfFile))
+                if (Check(TokenType.EndOfFile))
                     break;
-
                 statements.Add(ParseStatement());
             }
-
             return statements;
+        }
+
+        private bool IsFunctionKeyword()
+        {
+            if (!Check(TokenType.Identifier))
+                return false;
+
+            string lex = Peek().Lexeme;
+            return lex == "function"
+                || lex == "func"
+                || lex == "fun"
+                || lex == "fn"
+                || lex == "functi"
+                || lex == "f";
         }
 
         private Statement ParseStatement()
         {
-            if (Check(TokenKind.Const) || Check(TokenKind.Var))
+            // *** TU MUSI BYĆ OBSŁUGA IF ***
+            if (Match(TokenType.If))
+            {
+                return ParseIfStatement();
+            }
+
+            if (IsFunctionKeyword())
+            {
+                return ParseFunctionDeclaration();
+            }
+
+            if (Check(TokenType.Const) || Check(TokenType.Var))
+            {
                 return ParseVariableDeclaration();
+            }
 
-            if (Match(TokenKind.Delete))
-                return ParseDeleteStatement();
+            if (Match(TokenType.Reverse))
+            {
+                bool isDebug = ParseTerminatorIsDebug();
+                return new ReverseStatement(isDebug);
+            }
 
-            if (Match(TokenKind.Reverse))
-                return ParseReverseStatement();
+            if (Match(TokenType.Forward))
+            {
+                bool isDebug = ParseTerminatorIsDebug();
+                return new ForwardStatement(isDebug);
+            }
 
-            if (Match(TokenKind.Forward))
-                return ParseForwardStatement();
+            if (Match(TokenType.Delete))
+            {
+                Expression target = ParseExpression();
+                bool isDebug = ParseTerminatorIsDebug();
+                return new DeleteStatement(target, isDebug);
+            }
 
-            if (Match(TokenKind.When))
+            if (Match(TokenType.When))
+            {
                 return ParseWhenStatement();
+            }
 
-            return ParseExpressionStatement();
+            // domyślnie: wyrażenie jako statement
+            Expression expr = ParseExpression();
+            bool debug = ParseTerminatorIsDebug();
+            return new ExpressionStatement(expr, debug);
         }
 
-        private Statement ParseReverseStatement()
+        private bool ParseTerminatorIsDebug()
         {
-            var terminators = ConsumeTerminators();
-            return new ReverseStatement(terminators.Priority, terminators.HasQuestion);
+            if (Match(TokenType.Bang))
+                return false;
+            if (Match(TokenType.Question))
+                return true;
+            throw new InterpreterException("Expected '!' or '?' at end of statement.");
         }
 
-        private Statement ParseForwardStatement()
+        private Statement ParseFunctionDeclaration()
         {
-            var terminators = ConsumeTerminators();
-            return new ForwardStatement(terminators.Priority, terminators.HasQuestion);
-        }
+            // keyword: function / func / fun / fn / functi / f
+            Advance(); // zjadamy keyword (Identifier)
 
-        private Statement ParseDeleteStatement()
-        {
-            var target = ParseExpression();
-            var terminators = ConsumeTerminators();
-            return new DeleteStatement(target, terminators.Priority, terminators.HasQuestion);
+            Token nameTok = Consume(TokenType.Identifier, "Expected function name.");
+            string name = nameTok.Lexeme;
+
+            Consume(TokenType.LeftParen, "Expected '(' after function name.");
+
+            var parameters = new List<string>();
+            if (!Check(TokenType.RightParen))
+            {
+                do
+                {
+                    Token paramTok = Consume(TokenType.Identifier, "Expected parameter name.");
+                    parameters.Add(paramTok.Lexeme);
+                }
+                while (Match(TokenType.Comma));
+            }
+
+            Consume(TokenType.RightParen, "Expected ')' after function parameters.");
+            Consume(TokenType.Arrow, "Expected '=>' after function parameter list.");
+
+            Expression bodyExpr = ParseExpression();
+            bool isDebug = ParseTerminatorIsDebug(); // na razie ignorujemy isDebug
+
+            return new FunctionDeclarationStatement(name, parameters, bodyExpr);
         }
 
         private Statement ParseVariableDeclaration()
         {
-            Token firstToken = ConsumeConstOrVar("Expected 'const' or 'var' at start of declaration.");
-            Token secondToken = ConsumeConstOrVar("Expected 'const' or 'var' after first modifier.");
+            TokenType firstKw;
+            if (Match(TokenType.Const))
+                firstKw = TokenType.Const;
+            else if (Match(TokenType.Var))
+                firstKw = TokenType.Var;
+            else
+                throw new InterpreterException("Expected 'const' or 'var' at variable declaration.");
 
-            DeclarationKind declarationKind;
+            TokenType secondKw;
+            if (Match(TokenType.Const))
+                secondKw = TokenType.Const;
+            else if (Match(TokenType.Var))
+                secondKw = TokenType.Var;
+            else
+                throw new InterpreterException("Variable declaration must use two keywords (e.g. 'const const', 'var var').");
+
+            DeclarationKind declKind = DeclarationKind.Normal;
             Mutability mutability;
 
-            if (firstToken.Kind == TokenKind.Const &&
-                secondToken.Kind == TokenKind.Const &&
-                Check(TokenKind.Const))
+            if (firstKw == TokenType.Const && secondKw == TokenType.Const && Match(TokenType.Const))
             {
-                Advance(); // third const
-                declarationKind = DeclarationKind.ConstConstConst;
+                declKind = DeclarationKind.ConstConstConst;
                 mutability = Mutability.ConstConst;
             }
             else
             {
-                declarationKind = DeclarationKind.Normal;
-                mutability = DetermineMutability(firstToken, secondToken);
+                bool aConst = firstKw == TokenType.Const;
+                bool bConst = secondKw == TokenType.Const;
+
+                if (aConst && bConst) mutability = Mutability.ConstConst;
+                else if (aConst && !bConst) mutability = Mutability.ConstVar;
+                else if (!aConst && bConst) mutability = Mutability.VarConst;
+                else mutability = Mutability.VarVar;
             }
 
-            Token nameToken = Consume(TokenKind.Identifier, "Expected variable name.");
+            Token nameTok = Consume(TokenType.Identifier, "Expected variable name.");
+            string name = nameTok.Lexeme;
 
-            // Optional lifetime: <...>
             LifetimeSpecifier lifetime = LifetimeSpecifier.None;
-            if (Match(TokenKind.Less))
+            if (Match(TokenType.Less))
             {
-                lifetime = ParseLifetime();
+                lifetime = ParseLifetimeSpecifier();
             }
 
-            Expression initializer;
-            if (Match(TokenKind.Equal))
-            {
-                initializer = ParseExpression();
-            }
-            else
-            {
-                initializer = new LiteralExpression(Value.Null);
-            }
+            Consume(TokenType.Assign, "Expected '=' after variable name.");
+            Expression initializer = ParseExpression();
+            bool isDebug = ParseTerminatorIsDebug(); // ignored
 
-            var terminators = ConsumeTerminators();
-            int priority = terminators.Priority;
+            int priority = 0;
 
-            return new VariableDeclarationStatement(
-                declarationKind,
-                mutability,
-                nameToken.Lexeme,
-                initializer,
-                priority,
-                lifetime);
+            return new VariableDeclarationStatement(declKind, mutability, name, lifetime, priority, initializer);
         }
 
-        private LifetimeSpecifier ParseLifetime()
+        private LifetimeSpecifier ParseLifetimeSpecifier()
         {
-            // After '<'
-            if (Match(TokenKind.Identifier))
+            if (Match(TokenType.Identifier) &&
+                string.Equals(Previous().Lexeme, "Infinity", StringComparison.Ordinal))
             {
-                var id = Previous();
-                if (string.Equals(id.Lexeme, "Infinity", StringComparison.OrdinalIgnoreCase))
-                {
-                    Consume(TokenKind.Greater, "Expected '>' after Infinity lifetime.");
-                    return new LifetimeSpecifier(LifetimeKind.Infinity, double.PositiveInfinity);
-                }
-
-                // Unknown identifier inside <...>: treat as no-op, but still require '>'
-                Consume(TokenKind.Greater, "Expected '>' after lifetime.");
-                return LifetimeSpecifier.None;
+                Consume(TokenType.Greater, "Expected '>' after Infinity in lifetime specifier.");
+                return LifetimeSpecifier.Infinity;
             }
 
-            bool isNegative = Match(TokenKind.Minus);
+            Token numberTok = Consume(TokenType.Number, "Expected number in lifetime specifier.");
+            double value = (double)(numberTok.Literal ?? 0.0);
 
-            Token numberToken = Consume(TokenKind.Number, "Expected lifetime number or Infinity.");
-            if (!double.TryParse(numberToken.Lexeme, NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
-                throw Error(numberToken, "Invalid lifetime number.");
-
-            if (isNegative)
-                value = -value;
-
-            LifetimeKind kind = LifetimeKind.Lines;
-
-            if (Match(TokenKind.Identifier))
+            bool seconds = false;
+            if (Match(TokenType.Identifier) &&
+                string.Equals(Previous().Lexeme, "s", StringComparison.OrdinalIgnoreCase))
             {
-                var unitToken = Previous();
-                if (string.Equals(unitToken.Lexeme, "s", StringComparison.OrdinalIgnoreCase))
-                    kind = LifetimeKind.Seconds;
-                else
-                    kind = LifetimeKind.Lines; // unknown unit -> treat as lines
+                seconds = true;
             }
 
-            Consume(TokenKind.Greater, "Expected '>' after lifetime.");
-            return new LifetimeSpecifier(kind, value);
+            Consume(TokenType.Greater, "Expected '>' to close lifetime specifier.");
+
+            if (seconds)
+                return LifetimeSpecifier.Seconds(value);
+            else
+                return LifetimeSpecifier.Lines(value);
         }
 
         private Statement ParseWhenStatement()
         {
-            // we already consumed 'when'
-            Consume(TokenKind.LeftParen, "Expected '(' after 'when'.");
-            Expression condition = ParseWhenCondition();
-            Consume(TokenKind.RightParen, "Expected ')' after when condition.");
+            Consume(TokenType.LeftParen, "Expected '(' after 'when'.");
+            Expression condition = ParseExpression();
+            Consume(TokenType.RightParen, "Expected ')' after when condition.");
 
-            // Single-statement body, e.g.:
-            // when (x > 5) print("x > 5")!
-            // Body statement will consume its own terminators.
-            Statement body = ParseStatement();
+            Expression bodyExpr = ParseExpression();
+            bool isDebug = ParseTerminatorIsDebug();
+            var bodyStmt = new ExpressionStatement(bodyExpr, isDebug);
 
-            return new WhenStatement(condition, body);
+            return new WhenStatement(condition, bodyStmt);
         }
 
-        private Expression ParseWhenCondition()
+        private Statement ParseIfStatement()
         {
-            // Like expression, but '=' is always treated as equality, not assignment.
-            return ParseEqualityForWhen();
-        }
+            Consume(TokenType.LeftParen, "Expected '(' after 'if'.");
+            Expression condition = ParseExpression();
+            Consume(TokenType.RightParen, "Expected ')' after if condition.");
 
-        private Expression ParseEqualityForWhen()
-        {
-            Expression expr = ParseComparison();
+            Expression thenExpr = ParseExpression();
+            bool thenDebug = ParseTerminatorIsDebug();
+            Statement thenStmt = new ExpressionStatement(thenExpr, thenDebug);
 
-            while (true)
+            Statement? elseStmt = null;
+            if (Match(TokenType.Else))
             {
-                if (Match(TokenKind.Equal))
-                {
-                    Expression right = ParseComparison();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.Equal);
-                }
-                else if (Match(TokenKind.DoubleEqual))
-                {
-                    Expression right = ParseComparison();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.DoubleEqual);
-                }
-                else if (Match(TokenKind.TripleEqual))
-                {
-                    Expression right = ParseComparison();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.TripleEqual);
-                }
-                else if (Match(TokenKind.QuadEqual))
-                {
-                    Expression right = ParseComparison();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.QuadEqual);
-                }
-                else
-                {
-                    break;
-                }
+                Expression elseExpr = ParseExpression();
+                bool elseDebug = ParseTerminatorIsDebug();
+                elseStmt = new ExpressionStatement(elseExpr, elseDebug);
             }
 
-            return expr;
+            return new IfStatement(condition, thenStmt, elseStmt);
         }
 
-        private Statement ParseExpressionStatement()
-        {
-            Expression expr = ParseExpression();
-            var terminators = ConsumeTerminators();
-            return new ExpressionStatement(expr, terminators.Priority, terminators.HasQuestion);
-        }
-
-        private TerminatorInfo ConsumeTerminators()
-        {
-            int exclamations = 0;
-            int inverted = 0;
-            bool hasQuestion = false;
-            bool any = false;
-
-            while (true)
-            {
-                if (Match(TokenKind.Exclamation))
-                {
-                    exclamations++;
-                    any = true;
-                    continue;
-                }
-
-                if (Match(TokenKind.InvertedExclamation))
-                {
-                    inverted++;
-                    any = true;
-                    continue;
-                }
-
-                if (Match(TokenKind.Question))
-                {
-                    hasQuestion = true;
-                    any = true;
-                    continue;
-                }
-
-                break;
-            }
-
-            if (!any)
-                throw Error(Peek(), "Expected '!', '¡' or '?' at end of statement.");
-
-            return new TerminatorInfo(exclamations, inverted, hasQuestion);
-        }
-
-        private Expression ParseExpression()
-        {
-            return ParseAssignment();
-        }
+        private Expression ParseExpression() => ParseAssignment();
 
         private Expression ParseAssignment()
         {
             Expression expr = ParseEquality();
 
-            if (Match(TokenKind.Equal))
+            if (Match(TokenType.Assign))
             {
-                if (expr is IdentifierExpression identifier)
+                Expression value = ParseAssignment();
+
+                if (expr is IdentifierExpression ident)
                 {
-                    Expression valueExpr = ParseAssignment();
-                    return new AssignmentExpression(identifier.Name, valueExpr);
+                    return new AssignmentExpression(ident.Name, value);
                 }
 
-                if (expr is IndexExpression indexExpr)
+                if (expr is IndexExpression idx)
                 {
-                    Expression valueExpr = ParseAssignment();
-                    return new IndexAssignmentExpression(indexExpr.Target, indexExpr.Index, valueExpr);
+                    return new IndexAssignmentExpression(idx.Target, idx.Index, value);
                 }
 
-                throw Error(Previous(), "Invalid assignment target.");
+                throw new InterpreterException("Invalid assignment target.");
+            }
+
+            // cztero-gałęziowy operator warunkowy:
+            // cond ? t : f :: m ::: u
+            if (Match(TokenType.Question))
+            {
+                Expression whenTrue = ParseAssignment();
+
+                Consume(TokenType.Colon, "Expected ':' after true branch of conditional expression.");
+                Expression whenFalse = ParseAssignment();
+
+                // '::'
+                Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
+                Consume(TokenType.Colon, "Expected '::' before maybe-branch of conditional expression.");
+                Expression whenMaybe = ParseAssignment();
+
+                // ':::'
+                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+                Consume(TokenType.Colon, "Expected ':::' before undefined-branch of conditional expression.");
+                Expression whenUndefined = ParseAssignment();
+
+                return new ConditionalExpression(expr, whenTrue, whenFalse, whenMaybe, whenUndefined);
             }
 
             return expr;
@@ -325,20 +334,20 @@ namespace DreamberdInterpreter
 
             while (true)
             {
-                if (Match(TokenKind.DoubleEqual))
+                if (Match(TokenType.Equal))
                 {
                     Expression right = ParseComparison();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.DoubleEqual);
+                    expr = new BinaryExpression(expr, BinaryOperator.Equal, right);
                 }
-                else if (Match(TokenKind.TripleEqual))
+                else if (Match(TokenType.EqualEqual))
                 {
                     Expression right = ParseComparison();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.TripleEqual);
+                    expr = new BinaryExpression(expr, BinaryOperator.DoubleEqual, right);
                 }
-                else if (Match(TokenKind.QuadEqual))
+                else if (Match(TokenType.EqualEqualEqual))
                 {
                     Expression right = ParseComparison();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.QuadEqual);
+                    expr = new BinaryExpression(expr, BinaryOperator.TripleEqual, right);
                 }
                 else
                 {
@@ -351,29 +360,29 @@ namespace DreamberdInterpreter
 
         private Expression ParseComparison()
         {
-            Expression expr = ParseAddition();
+            Expression expr = ParseTerm();
 
             while (true)
             {
-                if (Match(TokenKind.Less))
+                if (Match(TokenType.Less))
                 {
-                    Expression right = ParseAddition();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.Less);
+                    Expression right = ParseTerm();
+                    expr = new BinaryExpression(expr, BinaryOperator.Less, right);
                 }
-                else if (Match(TokenKind.Greater))
+                else if (Match(TokenType.LessEqual))
                 {
-                    Expression right = ParseAddition();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.Greater);
+                    Expression right = ParseTerm();
+                    expr = new BinaryExpression(expr, BinaryOperator.LessOrEqual, right);
                 }
-                else if (Match(TokenKind.LessEqual))
+                else if (Match(TokenType.Greater))
                 {
-                    Expression right = ParseAddition();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.LessOrEqual);
+                    Expression right = ParseTerm();
+                    expr = new BinaryExpression(expr, BinaryOperator.Greater, right);
                 }
-                else if (Match(TokenKind.GreaterEqual))
+                else if (Match(TokenType.GreaterEqual))
                 {
-                    Expression right = ParseAddition();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.GreaterOrEqual);
+                    Expression right = ParseTerm();
+                    expr = new BinaryExpression(expr, BinaryOperator.GreaterOrEqual, right);
                 }
                 else
                 {
@@ -384,21 +393,21 @@ namespace DreamberdInterpreter
             return expr;
         }
 
-        private Expression ParseAddition()
+        private Expression ParseTerm()
         {
-            Expression expr = ParseMultiplication();
+            Expression expr = ParseFactor();
 
             while (true)
             {
-                if (Match(TokenKind.Plus))
+                if (Match(TokenType.Plus))
                 {
-                    Expression right = ParseMultiplication();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.Add);
+                    Expression right = ParseFactor();
+                    expr = new BinaryExpression(expr, BinaryOperator.Add, right);
                 }
-                else if (Match(TokenKind.Minus))
+                else if (Match(TokenType.Minus))
                 {
-                    Expression right = ParseMultiplication();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.Subtract);
+                    Expression right = ParseFactor();
+                    expr = new BinaryExpression(expr, BinaryOperator.Subtract, right);
                 }
                 else
                 {
@@ -409,21 +418,21 @@ namespace DreamberdInterpreter
             return expr;
         }
 
-        private Expression ParseMultiplication()
+        private Expression ParseFactor()
         {
             Expression expr = ParseUnary();
 
             while (true)
             {
-                if (Match(TokenKind.Star))
+                if (Match(TokenType.Star))
                 {
                     Expression right = ParseUnary();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.Multiply);
+                    expr = new BinaryExpression(expr, BinaryOperator.Multiply, right);
                 }
-                else if (Match(TokenKind.Slash))
+                else if (Match(TokenType.Slash))
                 {
                     Expression right = ParseUnary();
-                    expr = new BinaryExpression(expr, right, BinaryOperator.Divide);
+                    expr = new BinaryExpression(expr, BinaryOperator.Divide, right);
                 }
                 else
                 {
@@ -436,203 +445,105 @@ namespace DreamberdInterpreter
 
         private Expression ParseUnary()
         {
-            if (Match(TokenKind.Minus))
+            if (Match(TokenType.Minus))
             {
-                Expression operand = ParseUnary();
-                return new UnaryExpression(UnaryOperator.Negate, operand);
+                Expression right = ParseUnary();
+                return new UnaryExpression(UnaryOperator.Negate, right);
             }
 
-            return ParsePrimary();
+            return ParsePostfix();
         }
 
-        private Expression ParsePrimary()
+        private Expression ParsePostfix()
         {
-            Expression expr;
+            Expression expr = ParsePrimary();
 
-            if (Match(TokenKind.Number))
-            {
-                string text = Previous().Lexeme;
-                double value = double.Parse(text, CultureInfo.InvariantCulture);
-                expr = new LiteralExpression(Value.FromNumber(value));
-            }
-            else if (Match(TokenKind.String))
-            {
-                string s = Previous().Lexeme;
-                expr = new LiteralExpression(Value.FromString(s));
-            }
-            else if (Match(TokenKind.True))
-            {
-                expr = new LiteralExpression(Value.FromBoolean(true));
-            }
-            else if (Match(TokenKind.False))
-            {
-                expr = new LiteralExpression(Value.FromBoolean(false));
-            }
-            else if (Match(TokenKind.Maybe))
-            {
-                expr = new LiteralExpression(Value.FromString("maybe"));
-            }
-            else if (Match(TokenKind.Undefined))
-            {
-                expr = new LiteralExpression(Value.Undefined);
-            }
-            else if (Match(TokenKind.Identifier))
-            {
-                string name = Previous().Lexeme;
-                expr = new IdentifierExpression(name);
-            }
-            else if (Match(TokenKind.LeftParen))
-            {
-                Expression inner = ParseExpression();
-                Consume(TokenKind.RightParen, "Expected ')' after expression.");
-                expr = inner;
-            }
-            else if (Match(TokenKind.LeftBracket))
-            {
-                expr = ParseArrayLiteral();
-            }
-            else
-            {
-                throw Error(Peek(), "Unexpected token.");
-            }
-
-            return ParsePostfix(expr);
-        }
-
-        private Expression ParseArrayLiteral()
-        {
-            var elements = new List<Expression>();
-
-            if (!Check(TokenKind.RightBracket))
-            {
-                do
-                {
-                    elements.Add(ParseExpression());
-                } while (Match(TokenKind.Comma));
-            }
-
-            Consume(TokenKind.RightBracket, "Expected ']' after array literal.");
-            return new ArrayLiteralExpression(elements);
-        }
-
-        private Expression ParsePostfix(Expression expr)
-        {
             while (true)
             {
-                if (Match(TokenKind.LeftParen))
+                if (Match(TokenType.LeftParen))
                 {
                     var args = new List<Expression>();
-                    if (!Check(TokenKind.RightParen))
+                    if (!Check(TokenType.RightParen))
                     {
                         do
                         {
                             args.Add(ParseExpression());
-                        } while (Match(TokenKind.Comma));
+                        } while (Match(TokenType.Comma));
                     }
-
-                    Consume(TokenKind.RightParen, "Expected ')' after function arguments.");
+                    Consume(TokenType.RightParen, "Expected ')' after arguments.");
                     expr = new CallExpression(expr, args);
-                    continue;
                 }
-
-                if (Match(TokenKind.LeftBracket))
+                else if (Match(TokenType.LeftBracket))
                 {
-                    var indexExpr = ParseExpression();
-                    Consume(TokenKind.RightBracket, "Expected ']' after index expression.");
-                    expr = new IndexExpression(expr, indexExpr);
-                    continue;
+                    Expression index = ParseExpression();
+                    Consume(TokenType.RightBracket, "Expected ']' after index.");
+                    expr = new IndexExpression(expr, index);
                 }
-
-                break;
+                else
+                {
+                    break;
+                }
             }
 
             return expr;
         }
 
-        // Helpers
-
-        private bool Match(TokenKind kind)
+        private Expression ParsePrimary()
         {
-            if (Check(kind))
+            if (Match(TokenType.Number))
             {
-                Advance();
-                return true;
+                double value = (double)(Previous().Literal ?? 0.0);
+                return new LiteralExpression(Value.FromNumber(value));
             }
 
-            return false;
-        }
+            if (Match(TokenType.String))
+            {
+                string text = Previous().Literal as string ?? string.Empty;
+                return new LiteralExpression(Value.FromString(text));
+            }
 
-        private bool Check(TokenKind kind)
-        {
-            if (IsAtEnd())
-                return kind == TokenKind.EndOfFile;
+            if (Match(TokenType.Identifier))
+            {
+                string name = Previous().Lexeme;
 
-            return Peek().Kind == kind;
-        }
+                // Booleany i undefined jako literały Dreamberda
+                switch (name)
+                {
+                    case "true":
+                        return new LiteralExpression(Value.FromBoolean(true));
+                    case "false":
+                        return new LiteralExpression(Value.FromBoolean(false));
+                    case "maybe":
+                        return new LiteralExpression(Value.Maybe);
+                    case "undefined":
+                        return new LiteralExpression(Value.Undefined);
+                    default:
+                        return new IdentifierExpression(name);
+                }
+            }
 
-        private Token Advance()
-        {
-            if (!IsAtEnd())
-                _position++;
+            if (Match(TokenType.LeftParen))
+            {
+                Expression expr = ParseExpression();
+                Consume(TokenType.RightParen, "Expected ')' after expression.");
+                return expr;
+            }
 
-            return Previous();
-        }
+            if (Match(TokenType.LeftBracket))
+            {
+                var elements = new List<Expression>();
+                if (!Check(TokenType.RightBracket))
+                {
+                    do
+                    {
+                        elements.Add(ParseExpression());
+                    } while (Match(TokenType.Comma));
+                }
+                Consume(TokenType.RightBracket, "Expected ']' after array literal.");
+                return new ArrayLiteralExpression(elements);
+            }
 
-        private bool IsAtEnd()
-        {
-            return _position >= _tokens.Count || _tokens[_position].Kind == TokenKind.EndOfFile;
-        }
-
-        private Token Peek()
-        {
-            if (_position >= _tokens.Count)
-                return _tokens[_tokens.Count - 1];
-
-            return _tokens[_position];
-        }
-
-        private Token Previous()
-        {
-            return _tokens[_position - 1];
-        }
-
-        private Token Consume(TokenKind kind, string message)
-        {
-            if (Check(kind))
-                return Advance();
-
-            throw Error(Peek(), message);
-        }
-
-        private Token ConsumeConstOrVar(string message)
-        {
-            if (Check(TokenKind.Const) || Check(TokenKind.Var))
-                return Advance();
-
-            throw Error(Peek(), message);
-        }
-
-        private Mutability DetermineMutability(Token first, Token second)
-        {
-            if (first.Kind == TokenKind.Const && second.Kind == TokenKind.Const)
-                return Mutability.ConstConst;
-            if (first.Kind == TokenKind.Const && second.Kind == TokenKind.Var)
-                return Mutability.ConstVar;
-            if (first.Kind == TokenKind.Var && second.Kind == TokenKind.Const)
-                return Mutability.VarConst;
-            if (first.Kind == TokenKind.Var && second.Kind == TokenKind.Var)
-                return Mutability.VarVar;
-
-            throw new InterpreterException("Invalid mutability combination.");
-        }
-
-        private InterpreterException Error(Token token, string message)
-        {
-            string where = token.Kind == TokenKind.EndOfFile
-                ? "at end of input"
-                : $"at line {token.Line}, column {token.Column}";
-
-            return new InterpreterException($"{message} ({where}).");
+            throw new InterpreterException($"Unexpected token '{Peek().Lexeme}'.");
         }
     }
 }

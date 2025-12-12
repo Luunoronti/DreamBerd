@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text;
 
 namespace DreamberdInterpreter
 {
@@ -7,33 +9,15 @@ namespace DreamberdInterpreter
     {
         static void Main(string[] args)
         {
-            var context = new Context();
-            var globalConstStore = new InMemoryConstConstConstStore();
-            var evaluator = new Evaluator(context, globalConstStore);
+            var constStore = new InMemoryConstConstConstStore();
+            var variables = new VariableStore();
+            var evaluator = new Evaluator(variables, constStore);
 
             if (args.Length > 0)
             {
-                var path = args[0];
-                if (!File.Exists(path))
-                {
-                    Console.Error.WriteLine($"File '{path}' not found.");
-                    return;
-                }
-
-                var source = File.ReadAllText(path);
-
-                try
-                {
-                    RunSource(source, evaluator);
-                }
-                catch (InterpreterException ex)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine($"Error: {ex.Message}");
-                    Console.ResetColor();
-                }
-
-                
+                string path = args[0];
+                string source = File.ReadAllText(path);
+                RunSource(source, evaluator);
             }
             else
             {
@@ -46,35 +30,52 @@ namespace DreamberdInterpreter
             var lexer = new Lexer(source);
             var tokens = lexer.Tokenize();
             var parser = new Parser(tokens);
-            var statements = parser.Parse();
-
-            evaluator.ExecuteProgram(statements);
+            var program = parser.ParseProgram();
+            evaluator.ExecuteProgram(program);
         }
 
         private static void RunRepl(Evaluator evaluator)
         {
-            Console.WriteLine("DreamBerd interpreter (subset) - REPL mode.");
-            Console.WriteLine("Podaj kod DreamBerda (linie kończone ! lub ?). Ctrl+C żeby wyjść.");
+            Console.WriteLine("Dreamberd interpreter");
+            Console.WriteLine("Pusta linia = wykonaj kod. 'exit' żeby wyjść.\n");
+
+            var sb = new StringBuilder();
 
             while (true)
             {
-                Console.Write("DreamBerd> ");
-                var line = Console.ReadLine();
+                Console.Write(sb.Length == 0 ? "> " : "| ");
+                string? line = Console.ReadLine();
                 if (line == null)
                     break;
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
 
-                try
+                if (line.Trim().Equals("exit", StringComparison.OrdinalIgnoreCase))
+                    break;
+
+                if (string.IsNullOrWhiteSpace(line))
                 {
-                    RunSource(line, evaluator);
+                    if (sb.Length == 0)
+                        continue;
+
+                    string source = sb.ToString();
+                    sb.Clear();
+
+                    try
+                    {
+                        RunSource(source, evaluator);
+                    }
+                    catch (InterpreterException ex)
+                    {
+                        Console.WriteLine("[ERROR] " + ex.Message);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("[EXCEPTION] " + ex);
+                    }
+
+                    continue;
                 }
-                catch (InterpreterException ex)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine($"Error: {ex.Message}");
-                    Console.ResetColor();
-                }
+
+                sb.AppendLine(line);
             }
         }
     }

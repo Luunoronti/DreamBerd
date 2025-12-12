@@ -1,0 +1,27 @@
+const const t = true!
+const const f = false!
+var var m = maybe!
+var var u = undefined!
+
+print(t)!        // true
+print(f)!        // false
+print(m)!        // maybe
+print(u)!        // undefined
+
+when (m) print("maybe is truthy!")!
+when (u) print("to się nie wypisze")!
+
+
+//m = true!
+u = true!
+
+const const prawda = true!
+
+// delete na booleanach
+delete true!
+delete maybe!
+
+// print(prawda)!
+
+// rzuci wyjątek:
+// print(true)!

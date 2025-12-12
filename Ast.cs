@@ -1,26 +1,35 @@
 ﻿// Ast.cs
+using System;
 using System.Collections.Generic;
 
 namespace DreamberdInterpreter
 {
-    public abstract class AstNode
+    public enum UnaryOperator
     {
+        Negate
     }
 
-    public abstract class Statement : AstNode
+    public enum BinaryOperator
     {
-    }
-
-    public abstract class Expression : AstNode
-    {
+        Add,
+        Subtract,
+        Multiply,
+        Divide,
+        Equal,        // '=='
+        DoubleEqual,  // '==='
+        TripleEqual,  // '===='
+        Less,
+        Greater,
+        LessOrEqual,
+        GreaterOrEqual
     }
 
     public enum Mutability
     {
-        ConstConst,
-        ConstVar,
+        VarVar,
         VarConst,
-        VarVar
+        ConstVar,
+        ConstConst
     }
 
     public enum DeclarationKind
@@ -29,34 +38,8 @@ namespace DreamberdInterpreter
         ConstConstConst
     }
 
-    public enum LifetimeKind
+    public abstract class Statement
     {
-        None,
-        Lines,
-        Seconds,
-        Infinity
-    }
-
-    public readonly struct LifetimeSpecifier
-    {
-        public LifetimeKind Kind
-        {
-            get;
-        }
-        public double Value
-        {
-            get;
-        }
-
-        public LifetimeSpecifier(LifetimeKind kind, double value)
-        {
-            Kind = kind;
-            Value = value;
-        }
-
-        public static LifetimeSpecifier None => new LifetimeSpecifier(LifetimeKind.None, 0);
-
-        public bool IsNone => Kind == LifetimeKind.None;
     }
 
     public sealed class VariableDeclarationStatement : Statement
@@ -73,7 +56,7 @@ namespace DreamberdInterpreter
         {
             get;
         }
-        public Expression Initializer
+        public LifetimeSpecifier Lifetime
         {
             get;
         }
@@ -81,7 +64,7 @@ namespace DreamberdInterpreter
         {
             get;
         }
-        public LifetimeSpecifier Lifetime
+        public Expression Initializer
         {
             get;
         }
@@ -90,16 +73,16 @@ namespace DreamberdInterpreter
             DeclarationKind declarationKind,
             Mutability mutability,
             string name,
-            Expression initializer,
+            LifetimeSpecifier lifetime,
             int priority,
-            LifetimeSpecifier lifetime)
+            Expression initializer)
         {
             DeclarationKind = declarationKind;
             Mutability = mutability;
-            Name = name;
-            Initializer = initializer;
-            Priority = priority;
+            Name = name ?? throw new ArgumentNullException(nameof(name));
             Lifetime = lifetime;
+            Priority = priority;
+            Initializer = initializer ?? throw new ArgumentNullException(nameof(initializer));
         }
     }
 
@@ -109,55 +92,40 @@ namespace DreamberdInterpreter
         {
             get;
         }
-        public int Priority
-        {
-            get;
-        }
         public bool IsDebug
         {
             get;
         }
 
-        public ExpressionStatement(Expression expression, int priority, bool isDebug)
+        public ExpressionStatement(Expression expression, bool isDebug)
         {
-            Expression = expression;
-            Priority = priority;
+            Expression = expression ?? throw new ArgumentNullException(nameof(expression));
             IsDebug = isDebug;
         }
     }
 
     public sealed class ReverseStatement : Statement
     {
-        public int Priority
-        {
-            get;
-        }
         public bool IsDebug
         {
             get;
         }
 
-        public ReverseStatement(int priority, bool isDebug)
+        public ReverseStatement(bool isDebug)
         {
-            Priority = priority;
             IsDebug = isDebug;
         }
     }
 
     public sealed class ForwardStatement : Statement
     {
-        public int Priority
-        {
-            get;
-        }
         public bool IsDebug
         {
             get;
         }
 
-        public ForwardStatement(int priority, bool isDebug)
+        public ForwardStatement(bool isDebug)
         {
-            Priority = priority;
             IsDebug = isDebug;
         }
     }
@@ -168,19 +136,14 @@ namespace DreamberdInterpreter
         {
             get;
         }
-        public int Priority
-        {
-            get;
-        }
         public bool IsDebug
         {
             get;
         }
 
-        public DeleteStatement(Expression target, int priority, bool isDebug)
+        public DeleteStatement(Expression target, bool isDebug)
         {
-            Target = target;
-            Priority = priority;
+            Target = target ?? throw new ArgumentNullException(nameof(target));
             IsDebug = isDebug;
         }
     }
@@ -198,71 +161,59 @@ namespace DreamberdInterpreter
 
         public WhenStatement(Expression condition, Statement body)
         {
-            Condition = condition;
-            Body = body;
+            Condition = condition ?? throw new ArgumentNullException(nameof(condition));
+            Body = body ?? throw new ArgumentNullException(nameof(body));
         }
     }
 
-    public enum BinaryOperator
+    public sealed class FunctionDeclarationStatement : Statement
     {
-        Add,
-        Subtract,
-        Multiply,
-        Divide,
-        Equal,
-        DoubleEqual,
-        TripleEqual,
-        QuadEqual,
-        Less,
-        Greater,
-        LessOrEqual,
-        GreaterOrEqual
-    }
-
-    public sealed class BinaryExpression : Expression
-    {
-        public Expression Left
+        public string Name
         {
             get;
         }
-        public Expression Right
+        public IReadOnlyList<string> Parameters
         {
             get;
         }
-        public BinaryOperator Operator
+        public Expression Body
         {
             get;
         }
 
-        public BinaryExpression(Expression left, Expression right, BinaryOperator op)
+        public FunctionDeclarationStatement(string name, IReadOnlyList<string> parameters, Expression body)
         {
-            Left = left;
-            Right = right;
-            Operator = op;
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+            Parameters = parameters ?? throw new ArgumentNullException(nameof(parameters));
+            Body = body ?? throw new ArgumentNullException(nameof(body));
         }
     }
 
-    public enum UnaryOperator
+    public sealed class IfStatement : Statement
     {
-        Negate
+        public Expression Condition
+        {
+            get;
+        }
+        public Statement ThenBranch
+        {
+            get;
+        }
+        public Statement? ElseBranch
+        {
+            get;
+        }
+
+        public IfStatement(Expression condition, Statement thenBranch, Statement? elseBranch)
+        {
+            Condition = condition ?? throw new ArgumentNullException(nameof(condition));
+            ThenBranch = thenBranch ?? throw new ArgumentNullException(nameof(thenBranch));
+            ElseBranch = elseBranch;
+        }
     }
 
-    public sealed class UnaryExpression : Expression
+    public abstract class Expression
     {
-        public Expression Operand
-        {
-            get;
-        }
-        public UnaryOperator Operator
-        {
-            get;
-        }
-
-        public UnaryExpression(UnaryOperator op, Expression operand)
-        {
-            Operator = op;
-            Operand = operand;
-        }
     }
 
     public sealed class LiteralExpression : Expression
@@ -287,7 +238,48 @@ namespace DreamberdInterpreter
 
         public IdentifierExpression(string name)
         {
-            Name = name;
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+        }
+    }
+
+    public sealed class UnaryExpression : Expression
+    {
+        public UnaryOperator Operator
+        {
+            get;
+        }
+        public Expression Operand
+        {
+            get;
+        }
+
+        public UnaryExpression(UnaryOperator op, Expression operand)
+        {
+            Operator = op;
+            Operand = operand ?? throw new ArgumentNullException(nameof(operand));
+        }
+    }
+
+    public sealed class BinaryExpression : Expression
+    {
+        public Expression Left
+        {
+            get;
+        }
+        public BinaryOperator Operator
+        {
+            get;
+        }
+        public Expression Right
+        {
+            get;
+        }
+
+        public BinaryExpression(Expression left, BinaryOperator op, Expression right)
+        {
+            Left = left ?? throw new ArgumentNullException(nameof(left));
+            Operator = op;
+            Right = right ?? throw new ArgumentNullException(nameof(right));
         }
     }
 
@@ -304,57 +296,8 @@ namespace DreamberdInterpreter
 
         public AssignmentExpression(string name, Expression valueExpression)
         {
-            Name = name;
-            ValueExpression = valueExpression;
-        }
-    }
-
-    public sealed class CallExpression : Expression
-    {
-        public Expression Callee
-        {
-            get;
-        }
-        public IReadOnlyList<Expression> Arguments
-        {
-            get;
-        }
-
-        public CallExpression(Expression callee, IReadOnlyList<Expression> arguments)
-        {
-            Callee = callee;
-            Arguments = arguments;
-        }
-    }
-
-    public sealed class ArrayLiteralExpression : Expression
-    {
-        public IReadOnlyList<Expression> Elements
-        {
-            get;
-        }
-
-        public ArrayLiteralExpression(IReadOnlyList<Expression> elements)
-        {
-            Elements = elements;
-        }
-    }
-
-    public sealed class IndexExpression : Expression
-    {
-        public Expression Target
-        {
-            get;
-        }
-        public Expression Index
-        {
-            get;
-        }
-
-        public IndexExpression(Expression target, Expression index)
-        {
-            Target = target;
-            Index = index;
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+            ValueExpression = valueExpression ?? throw new ArgumentNullException(nameof(valueExpression));
         }
     }
 
@@ -375,9 +318,96 @@ namespace DreamberdInterpreter
 
         public IndexAssignmentExpression(Expression target, Expression index, Expression valueExpression)
         {
-            Target = target;
-            Index = index;
-            ValueExpression = valueExpression;
+            Target = target ?? throw new ArgumentNullException(nameof(target));
+            Index = index ?? throw new ArgumentNullException(nameof(index));
+            ValueExpression = valueExpression ?? throw new ArgumentNullException(nameof(valueExpression));
+        }
+    }
+
+    public sealed class CallExpression : Expression
+    {
+        public Expression Callee
+        {
+            get;
+        }
+        public IReadOnlyList<Expression> Arguments
+        {
+            get;
+        }
+
+        public CallExpression(Expression callee, IReadOnlyList<Expression> arguments)
+        {
+            Callee = callee ?? throw new ArgumentNullException(nameof(callee));
+            Arguments = arguments ?? throw new ArgumentNullException(nameof(arguments));
+        }
+    }
+
+    public sealed class ArrayLiteralExpression : Expression
+    {
+        public IReadOnlyList<Expression> Elements
+        {
+            get;
+        }
+
+        public ArrayLiteralExpression(IReadOnlyList<Expression> elements)
+        {
+            Elements = elements ?? throw new ArgumentNullException(nameof(elements));
+        }
+    }
+
+    public sealed class IndexExpression : Expression
+    {
+        public Expression Target
+        {
+            get;
+        }
+        public Expression Index
+        {
+            get;
+        }
+
+        public IndexExpression(Expression target, Expression index)
+        {
+            Target = target ?? throw new ArgumentNullException(nameof(target));
+            Index = index ?? throw new ArgumentNullException(nameof(index));
+        }
+    }
+
+    public sealed class ConditionalExpression : Expression
+    {
+        public Expression Condition
+        {
+            get;
+        }
+        public Expression WhenTrue
+        {
+            get;
+        }
+        public Expression WhenFalse
+        {
+            get;
+        }
+        public Expression WhenMaybe
+        {
+            get;
+        }
+        public Expression WhenUndefined
+        {
+            get;
+        }
+
+        public ConditionalExpression(
+            Expression condition,
+            Expression whenTrue,
+            Expression whenFalse,
+            Expression whenMaybe,
+            Expression whenUndefined)
+        {
+            Condition = condition ?? throw new ArgumentNullException(nameof(condition));
+            WhenTrue = whenTrue ?? throw new ArgumentNullException(nameof(whenTrue));
+            WhenFalse = whenFalse ?? throw new ArgumentNullException(nameof(whenFalse));
+            WhenMaybe = whenMaybe ?? throw new ArgumentNullException(nameof(whenMaybe));
+            WhenUndefined = whenUndefined ?? throw new ArgumentNullException(nameof(whenUndefined));
         }
     }
 }

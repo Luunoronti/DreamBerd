@@ -1,26 +1,19 @@
 ﻿// Evaluator.cs
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 
 namespace DreamberdInterpreter
 {
     public sealed class Evaluator
     {
-        private readonly Context _context;
-        private readonly IConstConstConstStore _constConstConstStore;
+        private readonly VariableStore _variables;
+        private readonly IConstConstConstStore _constStore;
 
         private readonly HashSet<double> _deletedNumbers = new();
         private readonly HashSet<string> _deletedStrings = new();
-        private readonly HashSet<bool> _deletedBooleans = new();
-
-        private readonly Dictionary<string, LifetimeInfo> _lifetimes =
-            new Dictionary<string, LifetimeInfo>(StringComparer.Ordinal);
+        private readonly HashSet<BooleanState> _deletedBooleans = new();
 
         private int _currentStatementIndex;
-        private readonly DateTime _startTimeUtc = DateTime.UtcNow;
-
-        // ----- WHEN subscriptions -----
 
         private sealed class WhenSubscription
         {
@@ -40,50 +33,45 @@ namespace DreamberdInterpreter
             }
         }
 
+        private sealed class FunctionDefinition
+        {
+            public IReadOnlyList<string> Parameters
+            {
+                get;
+            }
+            public Expression Body
+            {
+                get;
+            }
+
+            public FunctionDefinition(IReadOnlyList<string> parameters, Expression body)
+            {
+                Parameters = parameters ?? throw new ArgumentNullException(nameof(parameters));
+                Body = body ?? throw new ArgumentNullException(nameof(body));
+            }
+        }
+
+        private sealed class CallFrame
+        {
+            public Dictionary<string, Value> Locals
+            {
+                get;
+            } =
+                new Dictionary<string, Value>(StringComparer.Ordinal);
+        }
+
         private readonly List<WhenSubscription> _whenSubscriptions = new();
 
-        // ----- Lifetimes -----
+        private readonly Dictionary<string, FunctionDefinition> _functions =
+            new Dictionary<string, FunctionDefinition>(StringComparer.Ordinal);
 
-        private readonly struct LifetimeInfo
+        private readonly Stack<CallFrame> _callStack =
+            new Stack<CallFrame>();
+
+        public Evaluator(VariableStore variables, IConstConstConstStore constStore)
         {
-            public LifetimeSpecifier Lifetime
-            {
-                get;
-            }
-            public int DeclarationIndex
-            {
-                get;
-            }
-            public DateTime CreatedAtUtc
-            {
-                get;
-            }
-
-            public LifetimeInfo(LifetimeSpecifier lifetime, int declarationIndex, DateTime createdAtUtc)
-            {
-                Lifetime = lifetime;
-                DeclarationIndex = declarationIndex;
-                CreatedAtUtc = createdAtUtc;
-            }
-        }
-
-        // ----- Historia zmiennych dla previous/next/history -----
-
-        private sealed class VariableHistory
-        {
-            public List<Value> Values { get; } = new();
-            public int Index { get; set; } = -1;
-        }
-
-        private const int MaxHistory = 100;
-
-        private readonly Dictionary<string, VariableHistory> _history =
-            new Dictionary<string, VariableHistory>(StringComparer.Ordinal);
-
-        public Evaluator(Context context, IConstConstConstStore constConstConstStore)
-        {
-            _context = context ?? throw new ArgumentNullException(nameof(context));
-            _constConstConstStore = constConstConstStore ?? throw new ArgumentNullException(nameof(constConstConstStore));
+            _variables = variables ?? throw new ArgumentNullException(nameof(variables));
+            _constStore = constStore ?? throw new ArgumentNullException(nameof(constStore));
         }
 
         public void ExecuteProgram(IReadOnlyList<Statement> statements)
@@ -98,7 +86,8 @@ namespace DreamberdInterpreter
             while (index >= 0 && index < statements.Count)
             {
                 _currentStatementIndex = index;
-                ExpireLifetimes();
+
+                _variables.ExpireLifetimes(_currentStatementIndex, DateTime.UtcNow);
 
                 var statement = statements[index];
 
@@ -127,87 +116,27 @@ namespace DreamberdInterpreter
             }
         }
 
-        private void ExpireLifetimes()
-        {
-            if (_lifetimes.Count == 0)
-                return;
-
-            var toRemove = new List<string>();
-
-            foreach (var pair in _lifetimes)
-            {
-                string name = pair.Key;
-                var info = pair.Value;
-                var lifetime = info.Lifetime;
-
-                switch (lifetime.Kind)
-                {
-                    case LifetimeKind.Lines:
-                        {
-                            if (lifetime.Value > 0)
-                            {
-                                int lines = (int)lifetime.Value;
-                                int lastIndex = info.DeclarationIndex + lines - 1;
-                                if (_currentStatementIndex > lastIndex)
-                                    toRemove.Add(name);
-                            }
-
-                            break;
-                        }
-
-                    case LifetimeKind.Seconds:
-                        {
-                            if (lifetime.Value > 0)
-                            {
-                                double secs = lifetime.Value;
-                                double elapsed = (DateTime.UtcNow - info.CreatedAtUtc).TotalSeconds;
-                                if (elapsed > secs)
-                                    toRemove.Add(name);
-                            }
-
-                            break;
-                        }
-
-                    case LifetimeKind.Infinity:
-                    case LifetimeKind.None:
-                    default:
-                        break;
-                }
-            }
-
-            foreach (var name in toRemove)
-            {
-                _lifetimes.Remove(name);
-                _context.DeleteVariable(name);
-                _history.Remove(name); // usuwamy też historię
-            }
-        }
-
         private Value EvaluateStatement(Statement statement)
         {
             switch (statement)
             {
                 case VariableDeclarationStatement vds:
                     {
-                        var value = EvaluateExpression(vds.Initializer);
+                        Value value = EvaluateExpression(vds.Initializer);
 
                         if (vds.DeclarationKind == DeclarationKind.ConstConstConst)
                         {
-                            _constConstConstStore.Define(vds.Name, value);
+                            _constStore.Define(vds.Name, value);
                         }
                         else
                         {
-                            _context.DeclareVariable(vds.Name, vds.Mutability, value, vds.Priority);
-
-                            if (!vds.Lifetime.IsNone)
-                            {
-                                _lifetimes[vds.Name] = new LifetimeInfo(
-                                    vds.Lifetime,
-                                    _currentStatementIndex,
-                                    DateTime.UtcNow);
-                            }
-
-                            InitHistoryForVariable(vds.Name, value);
+                            _variables.Declare(
+                                vds.Name,
+                                vds.Mutability,
+                                value,
+                                vds.Priority,
+                                vds.Lifetime,
+                                _currentStatementIndex);
                         }
 
                         return Value.Null;
@@ -215,7 +144,7 @@ namespace DreamberdInterpreter
 
                 case ExpressionStatement es:
                     {
-                        var value = EvaluateExpression(es.Expression);
+                        Value value = EvaluateExpression(es.Expression);
                         if (es.IsDebug)
                         {
                             DebugPrint(es.Expression, value);
@@ -223,26 +152,14 @@ namespace DreamberdInterpreter
                         return value;
                     }
 
-                case ReverseStatement rs:
-                    {
-                        if (rs.IsDebug)
-                            Console.WriteLine("[DEBUG] reverse!");
-                        return Value.Null;
-                    }
-
-                case ForwardStatement fs:
-                    {
-                        if (fs.IsDebug)
-                            Console.WriteLine("[DEBUG] forward!");
-                        return Value.Null;
-                    }
-
                 case DeleteStatement ds:
                     {
-                        var value = EvaluateExpression(ds.Target);
+                        Value value = EvaluateExpression(ds.Target);
                         MarkDeleted(value);
                         if (ds.IsDebug)
+                        {
                             Console.WriteLine("[DEBUG] delete {0}", value);
+                        }
                         return Value.Null;
                     }
 
@@ -252,80 +169,52 @@ namespace DreamberdInterpreter
                         return Value.Null;
                     }
 
+                case FunctionDeclarationStatement fds:
+                    {
+                        var def = new FunctionDefinition(fds.Parameters, fds.Body);
+                        _functions[fds.Name] = def;
+                        return Value.Null;
+                    }
+
+                case IfStatement ifs:
+                    {
+                        Value cond = EvaluateExpression(ifs.Condition);
+                        if (cond.IsTruthy())
+                        {
+                            return EvaluateStatement(ifs.ThenBranch);
+                        }
+                        else if (ifs.ElseBranch != null)
+                        {
+                            return EvaluateStatement(ifs.ElseBranch);
+                        }
+                        return Value.Null;
+                    }
+
+                case ReverseStatement _:
+                case ForwardStatement _:
+                    return Value.Null;
+
                 default:
                     throw new InterpreterException($"Unknown statement type: {statement.GetType().Name}.");
             }
         }
 
-        private void InitHistoryForVariable(string name, Value initial)
-        {
-            if (!_history.TryGetValue(name, out var hist))
-            {
-                hist = new VariableHistory();
-                _history[name] = hist;
-            }
-
-            hist.Values.Clear();
-            hist.Values.Add(initial);
-            hist.Index = 0;
-        }
-
-        private void UpdateHistoryAfterWrite(string name, Value newValue)
-        {
-            if (!_history.TryGetValue(name, out var hist))
-            {
-                hist = new VariableHistory();
-                _history[name] = hist;
-            }
-
-            if (hist.Values.Count == 0)
-            {
-                hist.Values.Add(newValue);
-                hist.Index = 0;
-                return;
-            }
-
-            var current = hist.Values[hist.Index];
-            if (EqualsStrict(current, newValue))
-                return; // nic się nie zmieniło
-
-            // jeżeli jesteśmy w środku historii – obcinamy przyszłość
-            if (hist.Index < hist.Values.Count - 1)
-            {
-                hist.Values.RemoveRange(hist.Index + 1, hist.Values.Count - hist.Index - 1);
-            }
-
-            hist.Values.Add(newValue);
-            hist.Index = hist.Values.Count - 1;
-
-            if (hist.Values.Count > MaxHistory)
-            {
-                hist.Values.RemoveAt(0);
-                hist.Index--;
-                if (hist.Index < 0) hist.Index = 0;
-            }
-        }
-
         private void DebugPrint(Expression expr, Value value)
         {
-            // x?  → wypisz historię x, jeśli ją mamy
             if (expr is IdentifierExpression id &&
-                _history.TryGetValue(id.Name, out var hist) &&
-                hist.Values.Count > 0)
+                _variables.TryGetHistory(id.Name, out var hist, out var currentIndex) &&
+                hist.Count > 0)
             {
                 var parts = new List<string>();
-                for (int i = 0; i < hist.Values.Count; i++)
-                {
-                    parts.Add(hist.Values[i].ToString());
-                }
+                for (int i = 0; i < hist.Count; i++)
+                    parts.Add(hist[i].ToString());
 
                 string joined = string.Join(", ", parts);
                 Console.WriteLine(
-                    $"history({id.Name}): [{joined}] (current index = {hist.Index}, value = {hist.Values[hist.Index]})");
+                    $"history({id.Name}): [{joined}] (current index = {currentIndex}, value = {hist[currentIndex]})");
             }
             else
             {
-                // cokolwiek innego? wypisz wartość jak klasyczny debug
                 Console.WriteLine("[DEBUG] {0}", value);
             }
         }
@@ -372,6 +261,10 @@ namespace DreamberdInterpreter
                     result = EvaluateIndex(indexExpr);
                     break;
 
+                case ConditionalExpression condExpr:
+                    result = EvaluateConditional(condExpr);
+                    break;
+
                 default:
                     throw new InterpreterException($"Unknown expression type: {expression.GetType().Name}.");
             }
@@ -381,12 +274,23 @@ namespace DreamberdInterpreter
 
         private Value EvaluateIdentifier(IdentifierExpression ident)
         {
-            if (_constConstConstStore.TryGet(ident.Name, out var globalValue))
+            // najpierw zmienne lokalne funkcji
+            if (_callStack.Count > 0)
+            {
+                var frame = _callStack.Peek();
+                if (frame.Locals.TryGetValue(ident.Name, out var localValue))
+                    return localValue;
+            }
+
+            // const const const
+            if (_constStore.TryGet(ident.Name, out var globalValue))
                 return globalValue;
 
-            if (_context.TryGetVariable(ident.Name, out var localValue))
-                return localValue;
+            // globalne zmienne w VariableStore
+            if (_variables.TryGet(ident.Name, out var varValue))
+                return varValue;
 
+            // fallback: string z nazwą
             return Value.FromString(ident.Name);
         }
 
@@ -396,7 +300,7 @@ namespace DreamberdInterpreter
 
             return unary.Operator switch
             {
-                UnaryOperator.Negate => Value.FromNumber(-AsNumber(operand)),
+                UnaryOperator.Negate => Value.FromNumber(-operand.ToNumber()),
                 _ => throw new InterpreterException($"Unsupported unary operator {unary.Operator}.")
             };
         }
@@ -406,113 +310,119 @@ namespace DreamberdInterpreter
             Value left = EvaluateExpression(binary.Left);
             Value right = EvaluateExpression(binary.Right);
 
-            Value result;
-
-            switch (binary.Operator)
+            return binary.Operator switch
             {
-                case BinaryOperator.Add:
-                    if (left.Kind == ValueKind.Number && right.Kind == ValueKind.Number)
-                    {
-                        result = Value.FromNumber(left.Number + right.Number);
-                    }
-                    else
-                    {
-                        result = Value.FromString(left.ToString() + right.ToString());
-                    }
-                    break;
+                BinaryOperator.Add => EvaluateAdd(left, right),
+                BinaryOperator.Subtract => Value.FromNumber(left.ToNumber() - right.ToNumber()),
+                BinaryOperator.Multiply => Value.FromNumber(left.ToNumber() * right.ToNumber()),
+                BinaryOperator.Divide => EvaluateDivide(left, right),
+                BinaryOperator.Equal => Value.FromBoolean(left.VeryLooseEquals(right)),
+                BinaryOperator.DoubleEqual => Value.FromBoolean(left.LooseEquals(right)),
+                BinaryOperator.TripleEqual => Value.FromBoolean(left.StrictEquals(right)),
+                BinaryOperator.Less => Value.FromBoolean(left.ToNumber() < right.ToNumber()),
+                BinaryOperator.Greater => Value.FromBoolean(left.ToNumber() > right.ToNumber()),
+                BinaryOperator.LessOrEqual => Value.FromBoolean(left.ToNumber() <= right.ToNumber()),
+                BinaryOperator.GreaterOrEqual => Value.FromBoolean(left.ToNumber() >= right.ToNumber()),
+                _ => throw new InterpreterException($"Unsupported binary operator {binary.Operator}.")
+            };
+        }
 
-                case BinaryOperator.Subtract:
-                    result = Value.FromNumber(AsNumber(left) - AsNumber(right));
-                    break;
-
-                case BinaryOperator.Multiply:
-                    result = Value.FromNumber(AsNumber(left) * AsNumber(right));
-                    break;
-
-                case BinaryOperator.Divide:
-                    double divisor = AsNumber(right);
-                    if (Math.Abs(divisor) < double.Epsilon)
-                    {
-                        result = Value.Undefined;
-                    }
-                    else
-                    {
-                        result = Value.FromNumber(AsNumber(left) / divisor);
-                    }
-                    break;
-
-                case BinaryOperator.Equal:
-                    result = Value.FromBoolean(EqualsVeryLoose(left, right));
-                    break;
-
-                case BinaryOperator.DoubleEqual:
-                    result = Value.FromBoolean(EqualsLoose(left, right));
-                    break;
-
-                case BinaryOperator.TripleEqual:
-                    result = Value.FromBoolean(EqualsStrict(left, right));
-                    break;
-
-                case BinaryOperator.QuadEqual:
-                    result = Value.FromBoolean(EqualsVeryStrict(left, right));
-                    break;
-
-                case BinaryOperator.Less:
-                    result = Value.FromBoolean(AsNumber(left) < AsNumber(right));
-                    break;
-
-                case BinaryOperator.Greater:
-                    result = Value.FromBoolean(AsNumber(left) > AsNumber(right));
-                    break;
-
-                case BinaryOperator.LessOrEqual:
-                    result = Value.FromBoolean(AsNumber(left) <= AsNumber(right));
-                    break;
-
-                case BinaryOperator.GreaterOrEqual:
-                    result = Value.FromBoolean(AsNumber(left) >= AsNumber(right));
-                    break;
-
-                default:
-                    throw new InterpreterException($"Unsupported binary operator {binary.Operator}.");
+        private static Value EvaluateAdd(Value left, Value right)
+        {
+            if (left.Kind == ValueKind.Number && right.Kind == ValueKind.Number)
+            {
+                return Value.FromNumber(left.Number + right.Number);
             }
 
-            return result;
+            return Value.FromString(left.ToString() + right.ToString());
+        }
+
+        private static Value EvaluateDivide(Value left, Value right)
+        {
+            double divisor = right.ToNumber();
+            if (Math.Abs(divisor) < double.Epsilon)
+            {
+                return Value.Undefined;
+            }
+
+            return Value.FromNumber(left.ToNumber() / divisor);
+        }
+
+        private Value EvaluateConditional(ConditionalExpression condExpr)
+        {
+            Value cond = EvaluateExpression(condExpr.Condition);
+
+            // rozróżniamy true / false / maybe / undefined
+            if (cond.Kind == ValueKind.Boolean)
+            {
+                return cond.Bool switch
+                {
+                    BooleanState.True => EvaluateExpression(condExpr.WhenTrue),
+                    BooleanState.False => EvaluateExpression(condExpr.WhenFalse),
+                    BooleanState.Maybe => EvaluateExpression(condExpr.WhenMaybe),
+                    _ => EvaluateExpression(condExpr.WhenFalse)
+                };
+            }
+
+            if (cond.Kind == ValueKind.Undefined)
+            {
+                return EvaluateExpression(condExpr.WhenUndefined);
+            }
+
+            // inne typy -> na podstawie IsTruthy -> true/false
+            if (cond.IsTruthy())
+            {
+                return EvaluateExpression(condExpr.WhenTrue);
+            }
+            else
+            {
+                return EvaluateExpression(condExpr.WhenFalse);
+            }
         }
 
         private Value EvaluateAssignment(AssignmentExpression assign)
         {
-            if (_constConstConstStore.TryGet(assign.Name, out _))
+            if (_constStore.TryGet(assign.Name, out _))
                 throw new InterpreterException($"Cannot assign to const const const variable '{assign.Name}'.");
 
             Value value = EvaluateExpression(assign.ValueExpression);
-            _context.AssignVariable(assign.Name, value);
 
-            UpdateHistoryAfterWrite(assign.Name, value);
+            // jeśli jest w ramce funkcji, przypisujemy lokalnie
+            if (_callStack.Count > 0)
+            {
+                var frame = _callStack.Peek();
+                if (frame.Locals.ContainsKey(assign.Name))
+                {
+                    frame.Locals[assign.Name] = value;
+                    return value;
+                }
+            }
+
+            // globalny VariableStore
+            _variables.Assign(assign.Name, value, _currentStatementIndex);
             OnVariableMutated();
             return value;
         }
 
         private Value EvaluateIndexAssignment(IndexAssignmentExpression ia)
         {
-            var targetVal = EvaluateExpression(ia.Target);
+            Value targetVal = EvaluateExpression(ia.Target);
 
             if (targetVal.Kind != ValueKind.Array || targetVal.Array == null)
                 throw new InterpreterException("Index assignment is only supported on arrays.");
 
-            var indexVal = EvaluateExpression(ia.Index);
-            double index = AsNumber(indexVal);
+            Value indexVal = EvaluateExpression(ia.Index);
+            double index = indexVal.ToNumber();
 
             var dict = new Dictionary<double, Value>(targetVal.Array);
-            var newValue = EvaluateExpression(ia.ValueExpression);
+            Value newValue = EvaluateExpression(ia.ValueExpression);
             dict[index] = newValue;
 
             if (ia.Target is IdentifierExpression ident &&
-                !_constConstConstStore.TryGet(ident.Name, out _))
+                !_constStore.TryGet(ident.Name, out _))
             {
-                var newArrayValue = Value.FromArray(dict);
-                _context.AssignVariable(ident.Name, newArrayValue);
-                UpdateHistoryAfterWrite(ident.Name, newArrayValue);
+                Value newArrayValue = Value.FromArray(dict);
+                _variables.Assign(ident.Name, newArrayValue, _currentStatementIndex);
                 OnVariableMutated();
             }
 
@@ -527,8 +437,8 @@ namespace DreamberdInterpreter
             var snapshot = _whenSubscriptions.ToArray();
             foreach (var sub in snapshot)
             {
-                var condVal = EvaluateExpression(sub.Condition);
-                if (IsTruthy(condVal))
+                Value condVal = EvaluateExpression(sub.Condition);
+                if (condVal.IsTruthy())
                 {
                     EvaluateStatement(sub.Body);
                 }
@@ -541,6 +451,7 @@ namespace DreamberdInterpreter
             {
                 var name = ident.Name;
 
+                // built-iny
                 if (string.Equals(name, "print", StringComparison.Ordinal))
                 {
                     foreach (var argExpr in call.Arguments)
@@ -566,9 +477,17 @@ namespace DreamberdInterpreter
                 {
                     return EvaluateHistoryCall(call);
                 }
+
+                // funkcja użytkownika
+                if (_functions.TryGetValue(name, out var funcDef))
+                {
+                    return InvokeUserFunction(name, funcDef, call.Arguments);
+                }
             }
 
-            throw new InterpreterException("Only the built-in functions print(...), previous(...), next(...), history(...) are supported at this time.");
+            throw new InterpreterException(
+                "Only the built-in functions print(...), previous(...), next(...), history(...), " +
+                "and user-defined functions are supported at this time.");
         }
 
         private Value EvaluatePreviousCall(CallExpression call)
@@ -576,22 +495,12 @@ namespace DreamberdInterpreter
             if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
                 throw new InterpreterException("previous(x) expects a single identifier argument.");
 
-            var varName = id.Name;
-
-            if (!_history.TryGetValue(varName, out var hist) || hist.Values.Count == 0)
+            if (!_variables.TryPrevious(id.Name, out var newVal, out var changed))
                 return Value.Undefined;
 
-            if (hist.Index <= 0)
-            {
-                // nic nie zmieniamy, ale zwracamy aktualną
-                return hist.Values[hist.Index];
-            }
+            if (changed)
+                OnVariableMutated();
 
-            hist.Index--;
-            var newVal = hist.Values[hist.Index];
-
-            _context.AssignVariable(varName, newVal);
-            OnVariableMutated();
             return newVal;
         }
 
@@ -600,22 +509,12 @@ namespace DreamberdInterpreter
             if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
                 throw new InterpreterException("next(x) expects a single identifier argument.");
 
-            var varName = id.Name;
-
-            if (!_history.TryGetValue(varName, out var hist) || hist.Values.Count == 0)
+            if (!_variables.TryNext(id.Name, out var newVal, out var changed))
                 return Value.Undefined;
 
-            if (hist.Index >= hist.Values.Count - 1)
-            {
-                // nic nie zmieniamy
-                return hist.Values[hist.Index];
-            }
+            if (changed)
+                OnVariableMutated();
 
-            hist.Index++;
-            var newVal = hist.Values[hist.Index];
-
-            _context.AssignVariable(varName, newVal);
-            OnVariableMutated();
             return newVal;
         }
 
@@ -624,23 +523,51 @@ namespace DreamberdInterpreter
             if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
                 throw new InterpreterException("history(x) expects a single identifier argument.");
 
-            var varName = id.Name;
-
-            if (!_history.TryGetValue(varName, out var hist) || hist.Values.Count == 0)
+            if (!_variables.TryGetHistory(id.Name, out var values, out var currentIndex) ||
+                values.Count == 0)
             {
-                // zwracamy pustą tablicę
                 return Value.FromArray(new Dictionary<double, Value>());
             }
 
             var dict = new Dictionary<double, Value>();
-            // robimy tablicę od -1, 0, 1, ... (tak jak literal [a,b,c])
-            for (int i = 0; i < hist.Values.Count; i++)
+            for (int i = 0; i < values.Count; i++)
             {
-                double idx = i - 1;
-                dict[idx] = hist.Values[i];
+                double idx = i - 1;       // -1, 0, 1, 2...
+                dict[idx] = values[i];
             }
 
             return Value.FromArray(dict);
+        }
+        
+        private Value InvokeUserFunction(
+            string name,
+            FunctionDefinition def,
+            IReadOnlyList<Expression> arguments)
+        {
+            var frame = new CallFrame();
+
+            int paramCount = def.Parameters.Count;
+            for (int i = 0; i < paramCount; i++)
+            {
+                string paramName = def.Parameters[i];
+
+                Value argValue = i < arguments.Count
+                    ? EvaluateExpression(arguments[i])
+                    : Value.Undefined;
+
+                frame.Locals[paramName] = argValue;
+            }
+
+            _callStack.Push(frame);
+            try
+            {
+                Value result = EvaluateExpression(def.Body);
+                return result;
+            }
+            finally
+            {
+                _callStack.Pop();
+            }
         }
 
         private Value EvaluateArrayLiteral(ArrayLiteralExpression arrLit)
@@ -649,8 +576,8 @@ namespace DreamberdInterpreter
 
             for (int i = 0; i < arrLit.Elements.Count; i++)
             {
-                var elementValue = EvaluateExpression(arrLit.Elements[i]);
-                double index = i - 1; // -1, 0, 1, ...
+                Value elementValue = EvaluateExpression(arrLit.Elements[i]);
+                double index = i - 1;
                 dict[index] = elementValue;
             }
 
@@ -659,13 +586,13 @@ namespace DreamberdInterpreter
 
         private Value EvaluateIndex(IndexExpression indexExpr)
         {
-            var targetVal = EvaluateExpression(indexExpr.Target);
+            Value targetVal = EvaluateExpression(indexExpr.Target);
 
             if (targetVal.Kind != ValueKind.Array || targetVal.Array == null)
                 throw new InterpreterException("Indexing is only supported on arrays.");
 
-            var indexVal = EvaluateExpression(indexExpr.Index);
-            double index = AsNumber(indexVal);
+            Value indexVal = EvaluateExpression(indexExpr.Index);
+            double index = indexVal.ToNumber();
 
             if (!targetVal.Array.TryGetValue(index, out var element))
             {
@@ -675,77 +602,6 @@ namespace DreamberdInterpreter
             return element;
         }
 
-        private static double AsNumber(Value value)
-        {
-            if (value.Kind == ValueKind.Number)
-                return value.Number;
-
-            if (value.Kind == ValueKind.Boolean)
-                return value.Boolean ? 1.0 : 0.0;
-
-            if (value.Kind == ValueKind.String)
-            {
-                if (double.TryParse(value.String, NumberStyles.Float, CultureInfo.InvariantCulture, out double n))
-                    return n;
-            }
-
-            throw new InterpreterException($"Cannot convert value '{value}' to number.");
-        }
-
-        private static bool EqualsVeryLoose(Value a, Value b)
-        {
-            return string.Equals(a.ToString(), b.ToString(), StringComparison.Ordinal);
-        }
-
-        private static bool EqualsLoose(Value a, Value b)
-        {
-            if (a.Kind == b.Kind)
-            {
-                return EqualsStrict(a, b);
-            }
-
-            try
-            {
-                return Math.Abs(AsNumber(a) - AsNumber(b)) < 1e-9;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool EqualsStrict(Value a, Value b)
-        {
-            if (a.Kind != b.Kind)
-                return false;
-
-            return a.Kind switch
-            {
-                ValueKind.Number => Math.Abs(a.Number - b.Number) < 1e-9,
-                ValueKind.String => string.Equals(a.String, b.String, StringComparison.Ordinal),
-                ValueKind.Boolean => a.Boolean == b.Boolean,
-                ValueKind.Null => true,
-                ValueKind.Undefined => true,
-                ValueKind.Array => ReferenceEquals(a.Array, b.Array),
-                _ => false
-            };
-        }
-
-        private static bool EqualsVeryStrict(Value a, Value b)
-        {
-            if (!EqualsStrict(a, b))
-                return false;
-
-            if (a.Kind == ValueKind.Number)
-            {
-                string sa = a.Number.ToString("R", CultureInfo.InvariantCulture);
-                string sb = b.Number.ToString("R", CultureInfo.InvariantCulture);
-                return string.Equals(sa, sb, StringComparison.Ordinal);
-            }
-
-            return true;
-        }
-
         private void MarkDeleted(Value value)
         {
             switch (value.Kind)
@@ -753,12 +609,16 @@ namespace DreamberdInterpreter
                 case ValueKind.Number:
                     _deletedNumbers.Add(value.Number);
                     break;
+
                 case ValueKind.String:
-                    _deletedStrings.Add(value.String);
+                    if (value.String != null)
+                        _deletedStrings.Add(value.String);
                     break;
+
                 case ValueKind.Boolean:
-                    _deletedBooleans.Add(value.Boolean);
+                    _deletedBooleans.Add(value.Bool);
                     break;
+
                 default:
                     throw new InterpreterException("delete only works with primitive values (numbers, strings, booleans).");
             }
@@ -772,31 +632,19 @@ namespace DreamberdInterpreter
                     if (_deletedNumbers.Contains(value.Number))
                         throw new InterpreterException($"Value '{value}' has been deleted.");
                     break;
+
                 case ValueKind.String:
-                    if (_deletedStrings.Contains(value.String))
+                    if (value.String != null && _deletedStrings.Contains(value.String))
                         throw new InterpreterException($"Value '{value}' has been deleted.");
                     break;
+
                 case ValueKind.Boolean:
-                    if (_deletedBooleans.Contains(value.Boolean))
+                    if (_deletedBooleans.Contains(value.Bool))
                         throw new InterpreterException($"Value '{value}' has been deleted.");
                     break;
             }
 
             return value;
-        }
-
-        private static bool IsTruthy(Value value)
-        {
-            return value.Kind switch
-            {
-                ValueKind.Boolean => value.Boolean,
-                ValueKind.Null => false,
-                ValueKind.Undefined => false,
-                ValueKind.Number => Math.Abs(value.Number) > double.Epsilon,
-                ValueKind.String => !string.IsNullOrEmpty(value.String),
-                ValueKind.Array => value.Array != null && value.Array.Count > 0,
-                _ => false
-            };
         }
     }
 }

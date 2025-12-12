@@ -1,0 +1,24 @@
+// booleany
+const const t = true!
+const const f = false!
+const const m = maybe!
+const const u = undefined!
+
+// if / else
+if (t) print("t is true-ish")!
+else print("t is not truthy")!
+
+if (m) print("maybe is treated as truthy")!
+else print("maybe is falsy")!
+
+if (u) print("undefined is truthy")!
+else print("undefined is NOT truthy")!
+
+// cztero-gałęziowy warunek
+print(t ? "T" : "F" :: "M" ::: "U")!   // T
+print(f ? "T" : "F" :: "M" ::: "U")!   // F
+print(m ? "T" : "F" :: "M" ::: "U")!   // M
+print(u ? "T" : "F" :: "M" ::: "U")!   // U
+
+print(42 ? "T" : "F" :: "M" ::: "U")!  // T (truthy)
+print(0 ? "T" : "F" :: "M" ::: "U")!   // F (falsy)
