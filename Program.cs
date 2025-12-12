@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 
@@ -19,7 +20,9 @@ namespace DreamberdInterpreter
 
                 try
                 {
+                    var time = Stopwatch.GetTimestamp();
                     RunSource(source, evaluator);
+                    Console.WriteLine($"Runtime: {Stopwatch.GetElapsedTime(time)}");
                 }
                 catch (InterpreterException ex)
                 {

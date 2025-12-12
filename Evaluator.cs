@@ -22,10 +22,6 @@ namespace DreamberdInterpreter
 
         private sealed class WhenSubscription
         {
-            public bool IsDisabled
-            {
-                get; set;
-            } = false;
             public Expression Condition
             {
                 get;
@@ -34,11 +30,16 @@ namespace DreamberdInterpreter
             {
                 get;
             }
-
-            public WhenSubscription(Expression condition, Statement body)
+            public IReadOnlyCollection<string> Dependencies
             {
-                Condition = condition;
-                Body = body;
+                get;
+            }
+
+            public WhenSubscription(Expression condition, Statement body, IReadOnlyCollection<string> dependencies)
+            {
+                Condition = condition ?? throw new ArgumentNullException(nameof(condition));
+                Body = body ?? throw new ArgumentNullException(nameof(body));
+                Dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
             }
         }
 
@@ -100,8 +101,16 @@ namespace DreamberdInterpreter
                 new Dictionary<string, Value>(StringComparer.Ordinal);
         }
 
-        private readonly List<WhenSubscription> _whenSubscriptions = new();
+        private const string WhenWildcard = "*";
 
+        // when(sub.Condition) -> uruchamiaj Body tylko po mutacji zmiennych, które występują w Condition
+        // (plus wildcard '*' dla warunków bez żadnych zmiennych).
+        private readonly Dictionary<string, List<WhenSubscription>> _whenByVariable =
+            new Dictionary<string, List<WhenSubscription>>(StringComparer.Ordinal);
+
+        // Dispatch `when` nie może być rekurencyjny (body może mutować zmienne), więc robimy kolejkę zdarzeń.
+        private readonly Queue<string> _whenMutationQueue = new Queue<string>();
+        private bool _dispatchingWhen;
         private readonly Dictionary<string, FunctionDefinition> _functions =
             new Dictionary<string, FunctionDefinition>(StringComparer.Ordinal);
 
@@ -250,6 +259,7 @@ namespace DreamberdInterpreter
                                 vds.Lifetime,
                                 _currentStatementIndex);
                         }
+                        OnVariableMutated(vds.Name);
 
                         return Value.Null;
                     }
@@ -277,7 +287,9 @@ namespace DreamberdInterpreter
 
                 case WhenStatement ws:
                     {
-                        _whenSubscriptions.Add(new WhenSubscription(ws.Condition, ws.Body));
+                        var deps = CollectConditionDependencies(ws.Condition);
+                        var sub = new WhenSubscription(ws.Condition, ws.Body, deps);
+                        RegisterWhenSubscription(sub);
                         return Value.Null;
                     }
 
@@ -601,13 +613,14 @@ namespace DreamberdInterpreter
                 if (frame.Locals.ContainsKey(assign.Name))
                 {
                     frame.Locals[assign.Name] = value;
+                    OnVariableMutated(assign.Name);
                     return value;
                 }
             }
 
             // globalny VariableStore
             _variables.Assign(assign.Name, value, _currentStatementIndex);
-            OnVariableMutated();
+            OnVariableMutated(assign.Name);
             return value;
         }
 
@@ -630,33 +643,166 @@ namespace DreamberdInterpreter
             {
                 Value newArrayValue = Value.FromArray(dict);
                 _variables.Assign(ident.Name, newArrayValue, _currentStatementIndex);
-                OnVariableMutated();
+                OnVariableMutated(ident.Name);
             }
 
             return newValue;
         }
 
-        private bool isInVarMutationRoutine = false;
-        private void OnVariableMutated()
+
+        private void RegisterWhenSubscription(WhenSubscription sub)
         {
-            if (_whenSubscriptions.Count == 0)
-                return;
-
-            if (isInVarMutationRoutine)
-                return;
-
-            isInVarMutationRoutine = true;
-
-            var snapshot = _whenSubscriptions.ToArray();
-            foreach (var sub in snapshot)
+            foreach (var dep in sub.Dependencies)
             {
-                Value condVal = EvaluateExpression(sub.Condition);
-                if (condVal.IsTruthy())
+                if (!_whenByVariable.TryGetValue(dep, out var list))
                 {
-                    EvaluateStatement(sub.Body);
+                    list = new List<WhenSubscription>();
+                    _whenByVariable[dep] = list;
+                }
+
+                list.Add(sub);
+            }
+        }
+
+        private IReadOnlyCollection<string> CollectConditionDependencies(Expression condition)
+        {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            CollectDependencies(condition, set, isCallee: false);
+
+            // Jeśli warunek nie odwołuje się do żadnej zmiennej, zachowujemy stary vibe:
+            // when(true) odpala się po każdej mutacji.
+            if (set.Count == 0)
+                set.Add(WhenWildcard);
+
+            return set;
+        }
+
+        private void CollectDependencies(Expression expr, HashSet<string> deps, bool isCallee)
+        {
+            switch (expr)
+            {
+                case null:
+                    return;
+
+                case IdentifierExpression id:
+                    // Jeżeli to jest nazwa funkcji (callee), to nie traktujemy tego jako zależności od zmiennej.
+                    if (!isCallee)
+                        deps.Add(id.Name);
+                    return;
+
+                case LiteralExpression:
+                    return;
+
+                case UnaryExpression u:
+                    CollectDependencies(u.Operand, deps, isCallee: false);
+                    return;
+
+                case BinaryExpression b:
+                    CollectDependencies(b.Left, deps, isCallee: false);
+                    CollectDependencies(b.Right, deps, isCallee: false);
+                    return;
+
+                case AssignmentExpression a:
+                    deps.Add(a.Name);
+                    CollectDependencies(a.ValueExpression, deps, isCallee: false);
+                    return;
+
+                case IndexAssignmentExpression ia:
+                    CollectDependencies(ia.Target, deps, isCallee: false);
+                    CollectDependencies(ia.Index, deps, isCallee: false);
+                    CollectDependencies(ia.ValueExpression, deps, isCallee: false);
+                    return;
+
+                case IndexExpression ix:
+                    CollectDependencies(ix.Target, deps, isCallee: false);
+                    CollectDependencies(ix.Index, deps, isCallee: false);
+                    return;
+
+                case ArrayLiteralExpression al:
+                    foreach (var el in al.Elements)
+                        CollectDependencies(el, deps, isCallee: false);
+                    return;
+
+                case ConditionalExpression ce:
+                    CollectDependencies(ce.Condition, deps, isCallee: false);
+                    CollectDependencies(ce.WhenTrue, deps, isCallee: false);
+                    CollectDependencies(ce.WhenFalse, deps, isCallee: false);
+                    CollectDependencies(ce.WhenMaybe, deps, isCallee: false);
+                    CollectDependencies(ce.WhenUndefined, deps, isCallee: false);
+                    return;
+
+                case CallExpression call:
+                    // Nie traktujemy nazwy funkcji jako zależności od zmiennej.
+                    if (call.Callee is not IdentifierExpression)
+                        CollectDependencies(call.Callee, deps, isCallee: true);
+
+                    foreach (var arg in call.Arguments)
+                        CollectDependencies(arg, deps, isCallee: false);
+                    return;
+
+                default:
+                    // Jeśli dojdą nowe expressiony w przyszłości, a zapomnimy je tu dodać,
+                    // to po prostu nie będą wpływać na zależności `when`.
+                    return;
+            }
+        }
+
+        private void OnVariableMutated(string variableName)
+        {
+            if (string.IsNullOrEmpty(variableName))
+                return;
+
+            if (_whenByVariable.Count == 0)
+                return;
+
+            _whenMutationQueue.Enqueue(variableName);
+
+            // jeśli już dispatchujemy, kolejka zostanie opróżniona po powrocie
+            if (_dispatchingWhen)
+                return;
+
+            _dispatchingWhen = true;
+            try
+            {
+                int steps = 0;
+
+                while (_whenMutationQueue.Count > 0)
+                {
+                    if (++steps > 100_000)
+                        throw new InterpreterException("when dispatch exceeded safety limit (possible infinite loop).");
+
+                    string mutated = _whenMutationQueue.Dequeue();
+
+                    // Zbieramy subskrypcje dla konkretnej zmiennej + wildcard '*'.
+                    var toRun = new HashSet<WhenSubscription>();
+
+                    if (_whenByVariable.TryGetValue(mutated, out var specific))
+                    {
+                        foreach (var sub in specific)
+                            toRun.Add(sub);
+                    }
+
+                    if (_whenByVariable.TryGetValue(WhenWildcard, out var any))
+                    {
+                        foreach (var sub in any)
+                            toRun.Add(sub);
+                    }
+
+                    foreach (var sub in toRun)
+                    {
+                        Value condVal = EvaluateExpression(sub.Condition);
+                        if (condVal.IsTruthy())
+                        {
+                            EvaluateStatement(sub.Body);
+                        }
+                    }
                 }
             }
-            isInVarMutationRoutine = false;
+            finally
+            {
+                _dispatchingWhen = false;
+                _whenMutationQueue.Clear();
+            }
         }
 
         private Value EvaluateCall(CallExpression call)
@@ -744,55 +890,6 @@ namespace DreamberdInterpreter
             throw new InterpreterException(
                 "Only the built-in functions print(...), previous(...), next(...), history(...), " +
                 "and user-defined functions are supported at this time.");
-        }
-
-        private Value EvaluatePreviousCall(CallExpression call)
-        {
-            if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
-                throw new InterpreterException("previous(x) expects a single identifier argument.", call.Position);
-
-            if (!_variables.TryPrevious(id.Name, out var newVal, out var changed))
-                return Value.Undefined;
-
-            if (changed)
-                OnVariableMutated();
-
-            return newVal;
-        }
-
-        private Value EvaluateNextCall(CallExpression call)
-        {
-            if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
-                throw new InterpreterException("next(x) expects a single identifier argument.", call.Position);
-
-            if (!_variables.TryNext(id.Name, out var newVal, out var changed))
-                return Value.Undefined;
-
-            if (changed)
-                OnVariableMutated();
-
-            return newVal;
-        }
-
-        private Value EvaluateHistoryCall(CallExpression call)
-        {
-            if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
-                throw new InterpreterException("history(x) expects a single identifier argument.", call.Position);
-
-            if (!_variables.TryGetHistory(id.Name, out var values, out var currentIndex) ||
-                values.Count == 0)
-            {
-                return Value.FromArray(new Dictionary<double, Value>());
-            }
-
-            var dict = new Dictionary<double, Value>();
-            for (int i = 0; i < values.Count; i++)
-            {
-                double idx = i - 1;       // -1, 0, 1, 2...
-                dict[idx] = values[i];
-            }
-
-            return Value.FromArray(dict);
         }
 
         // ------------------------------------------------------------
@@ -1049,6 +1146,56 @@ namespace DreamberdInterpreter
             return Value.FromArray(dict);
         }
 
+
+
+        private Value EvaluatePreviousCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
+                throw new InterpreterException("previous(x) expects a single identifier argument.", call.Position);
+
+            if (!_variables.TryPrevious(id.Name, out var newVal, out var changed))
+                return Value.Undefined;
+
+            if (changed)
+                OnVariableMutated(id.Name);
+
+            return newVal;
+        }
+
+        private Value EvaluateNextCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
+                throw new InterpreterException("next(x) expects a single identifier argument.", call.Position);
+
+            if (!_variables.TryNext(id.Name, out var newVal, out var changed))
+                return Value.Undefined;
+
+            if (changed)
+                OnVariableMutated(id.Name);
+
+            return newVal;
+        }
+
+        private Value EvaluateHistoryCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
+                throw new InterpreterException("history(x) expects a single identifier argument.", call.Position);
+
+            if (!_variables.TryGetHistory(id.Name, out var values, out var currentIndex) ||
+                values.Count == 0)
+            {
+                return Value.FromArray(new Dictionary<double, Value>());
+            }
+
+            var dict = new Dictionary<double, Value>();
+            for (int i = 0; i < values.Count; i++)
+            {
+                double idx = i - 1;       // -1, 0, 1, 2...
+                dict[idx] = values[i];
+            }
+
+            return Value.FromArray(dict);
+        }
 
         private Value InvokeUserFunction(
             string name,

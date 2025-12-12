@@ -1,23 +1,29 @@
 // AoC 2025 / Day 01 / Part 1 (DreamBerd edition)
 // "The safe is a decoy"
 
-// Input: file "input.txt" next to the executable.
+// Input: file "/AoC/2025/01_01_test.txt" next to the executable.
 // Each line: L<number> or R<number>.
+
+const const VERBOSE    = false!
+const const START_DIAL = 50!
 
 const const const NORTH_POLE = "🎄"!
 
-var var dial = 50!
+var var dial = START_DIAL!
 var var password = 0!
+var var steps = 0!
 
-// Every time the dial *ends up* on 0, Santa gains +1 security theatre.
-when (dial ==== 0) print("Dial is passing 0")!
-
-// password = password + 1!
+// Every time the dial *ends up* on 0, Santa gains +1 to security.
+when (dial ==== 0) {
+    password = password + 1!
+    if (VERBOSE) print("🔐 *click* dial=0  password=" + password)!
+}
 
 var var scroll = readLines("./AoC/2025/01_01_test.txt")!
 var var i = -1!
 
-while (true) {
+while (true) 
+{
     var var raw = scroll[i]!
     if (raw ==== undefined) break!
 
@@ -42,15 +48,15 @@ while (true) {
     while (next < 0)  { next = next + 100! }
     while (next >= 100) { next = next - 100! }
 
+    steps = steps + 1!
+    if (VERBOSE) print("step " + steps + ": " + dir + dist + "  -> dial=" + dial)!
+
     dial = next!
 
-    // my when() does not work as intended :(
-        
-    if( dial ==== 0) password = password + 1!
     i = i + 1!
 }
 
 // The actual password:
-print(password)!
+//print(password)!
 // optional brag:
 print(NORTH_POLE + " password = " + password)! 

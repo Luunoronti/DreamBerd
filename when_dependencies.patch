@@ -1,0 +1,288 @@
+--- Evaluator.cs	2025-12-12 17:42:50.000000000 +0000
++++ Evaluator.cs	2025-12-12 18:14:01.313448739 +0000
+@@ -22,19 +22,15 @@
+ 
+         private sealed class WhenSubscription
+         {
+-            public Expression Condition
+-            {
+-                get;
+-            }
+-            public Statement Body
+-            {
+-                get;
+-            }
++            public Expression Condition { get; }
++            public Statement Body { get; }
++            public IReadOnlyCollection<string> Dependencies { get; }
+ 
+-            public WhenSubscription(Expression condition, Statement body)
++            public WhenSubscription(Expression condition, Statement body, IReadOnlyCollection<string> dependencies)
+             {
+-                Condition = condition;
+-                Body = body;
++                Condition = condition ?? throw new ArgumentNullException(nameof(condition));
++                Body = body ?? throw new ArgumentNullException(nameof(body));
++                Dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
+             }
+         }
+ 
+@@ -96,12 +92,16 @@
+                 new Dictionary<string, Value>(StringComparer.Ordinal);
+         }
+ 
+-        private readonly List<WhenSubscription> _whenSubscriptions = new();
++        private const string WhenWildcard = "*";
+ 
+-        // `when` może mutować zmienne w body, więc potrzebujemy ochrony przed re-entrancy.
+-        private bool _dispatchingWhen;
+-        private bool _whenDirty;
++        // when(sub.Condition) -> uruchamiaj Body tylko po mutacji zmiennych, które występują w Condition
++        // (plus wildcard '*' dla warunków bez żadnych zmiennych).
++        private readonly Dictionary<string, List<WhenSubscription>> _whenByVariable =
++            new Dictionary<string, List<WhenSubscription>>(StringComparer.Ordinal);
+ 
++        // Dispatch `when` nie może być rekurencyjny (body może mutować zmienne), więc robimy kolejkę zdarzeń.
++        private readonly Queue<string> _whenMutationQueue = new Queue<string>();
++        private bool _dispatchingWhen;
+         private readonly Dictionary<string, FunctionDefinition> _functions =
+             new Dictionary<string, FunctionDefinition>(StringComparer.Ordinal);
+ 
+@@ -250,10 +250,9 @@
+                                 vds.Lifetime,
+                                 _currentStatementIndex);
+                         }
++                        OnVariableMutated(vds.Name);
+ 
+-                                                OnVariableMutated();
+-
+-return Value.Null;
++                        return Value.Null;
+                     }
+ 
+                 case ExpressionStatement es:
+@@ -279,7 +278,9 @@
+ 
+                 case WhenStatement ws:
+                     {
+-                        _whenSubscriptions.Add(new WhenSubscription(ws.Condition, ws.Body));
++                        var deps = CollectConditionDependencies(ws.Condition);
++                        var sub = new WhenSubscription(ws.Condition, ws.Body, deps);
++                        RegisterWhenSubscription(sub);
+                         return Value.Null;
+                     }
+ 
+@@ -613,13 +614,14 @@
+                 if (frame.Locals.ContainsKey(assign.Name))
+                 {
+                     frame.Locals[assign.Name] = value;
++                    OnVariableMutated(assign.Name);
+                     return value;
+                 }
+             }
+ 
+             // globalny VariableStore
+             _variables.Assign(assign.Name, value, _currentStatementIndex);
+-            OnVariableMutated();
++            OnVariableMutated(assign.Name);
+             return value;
+         }
+ 
+@@ -642,36 +644,152 @@
+             {
+                 Value newArrayValue = Value.FromArray(dict);
+                 _variables.Assign(ident.Name, newArrayValue, _currentStatementIndex);
+-                OnVariableMutated();
++                OnVariableMutated(ident.Name);
+             }
+ 
+             return newValue;
+         }
+ 
+-        private void OnVariableMutated()
++
++        private void RegisterWhenSubscription(WhenSubscription sub)
+         {
+-            if (_whenSubscriptions.Count == 0)
++            foreach (var dep in sub.Dependencies)
++            {
++                if (!_whenByVariable.TryGetValue(dep, out var list))
++                {
++                    list = new List<WhenSubscription>();
++                    _whenByVariable[dep] = list;
++                }
++
++                list.Add(sub);
++            }
++        }
++
++        private IReadOnlyCollection<string> CollectConditionDependencies(Expression condition)
++        {
++            var set = new HashSet<string>(StringComparer.Ordinal);
++            CollectDependencies(condition, set, isCallee: false);
++
++            // Jeśli warunek nie odwołuje się do żadnej zmiennej, zachowujemy stary vibe:
++            // when(true) odpala się po każdej mutacji.
++            if (set.Count == 0)
++                set.Add(WhenWildcard);
++
++            return set;
++        }
++
++        private void CollectDependencies(Expression expr, HashSet<string> deps, bool isCallee)
++        {
++            switch (expr)
++            {
++                case null:
++                    return;
++
++                case IdentifierExpression id:
++                    // Jeżeli to jest nazwa funkcji (callee), to nie traktujemy tego jako zależności od zmiennej.
++                    if (!isCallee)
++                        deps.Add(id.Name);
++                    return;
++
++                case LiteralExpression:
++                    return;
++
++                case UnaryExpression u:
++                    CollectDependencies(u.Operand, deps, isCallee: false);
++                    return;
++
++                case BinaryExpression b:
++                    CollectDependencies(b.Left, deps, isCallee: false);
++                    CollectDependencies(b.Right, deps, isCallee: false);
++                    return;
++
++                case AssignmentExpression a:
++                    deps.Add(a.Name);
++                    CollectDependencies(a.ValueExpression, deps, isCallee: false);
++                    return;
++
++                case IndexAssignmentExpression ia:
++                    CollectDependencies(ia.Target, deps, isCallee: false);
++                    CollectDependencies(ia.Index, deps, isCallee: false);
++                    CollectDependencies(ia.ValueExpression, deps, isCallee: false);
++                    return;
++
++                case IndexExpression ix:
++                    CollectDependencies(ix.Target, deps, isCallee: false);
++                    CollectDependencies(ix.Index, deps, isCallee: false);
++                    return;
++
++                case ArrayLiteralExpression al:
++                    foreach (var el in al.Elements)
++                        CollectDependencies(el, deps, isCallee: false);
++                    return;
++
++                case ConditionalExpression ce:
++                    CollectDependencies(ce.Condition, deps, isCallee: false);
++                    CollectDependencies(ce.WhenTrue, deps, isCallee: false);
++                    CollectDependencies(ce.WhenFalse, deps, isCallee: false);
++                    CollectDependencies(ce.WhenMaybe, deps, isCallee: false);
++                    CollectDependencies(ce.WhenUndefined, deps, isCallee: false);
++                    return;
++
++                case CallExpression call:
++                    // Nie traktujemy nazwy funkcji jako zależności od zmiennej.
++                    if (call.Callee is not IdentifierExpression)
++                        CollectDependencies(call.Callee, deps, isCallee: true);
++
++                    foreach (var arg in call.Arguments)
++                        CollectDependencies(arg, deps, isCallee: false);
++                    return;
++
++                default:
++                    // Jeśli dojdą nowe expressiony w przyszłości, a zapomnimy je tu dodać,
++                    // to po prostu nie będą wpływać na zależności `when`.
++                    return;
++            }
++        }
++
++        private void OnVariableMutated(string variableName)
++        {
++            if (string.IsNullOrEmpty(variableName))
++                return;
++
++            if (_whenByVariable.Count == 0)
+                 return;
+ 
+-            // Jeśli jesteśmy w trakcie dispatchu, zaznaczamy "dirty" i wyjdź.
+-            // Po zakończeniu bieżącej iteracji zrobimy kolejną rundę.
++            _whenMutationQueue.Enqueue(variableName);
++
++            // jeśli już dispatchujemy, kolejka zostanie opróżniona po powrocie
+             if (_dispatchingWhen)
+-            {
+-                _whenDirty = true;
+                 return;
+-            }
+ 
++            _dispatchingWhen = true;
+             try
+             {
+-                _dispatchingWhen = true;
++                int steps = 0;
+ 
+-                do
++                while (_whenMutationQueue.Count > 0)
+                 {
+-                    _whenDirty = false;
++                    if (++steps > 100_000)
++                        throw new InterpreterException("when dispatch exceeded safety limit (possible infinite loop).");
++
++                    string mutated = _whenMutationQueue.Dequeue();
++
++                    // Zbieramy subskrypcje dla konkretnej zmiennej + wildcard '*'.
++                    var toRun = new HashSet<WhenSubscription>();
++
++                    if (_whenByVariable.TryGetValue(mutated, out var specific))
++                    {
++                        foreach (var sub in specific)
++                            toRun.Add(sub);
++                    }
++
++                    if (_whenByVariable.TryGetValue(WhenWildcard, out var any))
++                    {
++                        foreach (var sub in any)
++                            toRun.Add(sub);
++                    }
+ 
+-                    // Snapshot, żeby modyfikacje listy subskrypcji podczas wykonywania nie rozwalały iteracji.
+-                    var snapshot = _whenSubscriptions.ToArray();
+-                    foreach (var sub in snapshot)
++                    foreach (var sub in toRun)
+                     {
+                         Value condVal = EvaluateExpression(sub.Condition);
+                         if (condVal.IsTruthy())
+@@ -680,11 +798,11 @@
+                         }
+                     }
+                 }
+-                while (_whenDirty);
+             }
+             finally
+             {
+                 _dispatchingWhen = false;
++                _whenMutationQueue.Clear();
+             }
+         }
+ 
+@@ -742,7 +860,7 @@
+                 return Value.Undefined;
+ 
+             if (changed)
+-                OnVariableMutated();
++                OnVariableMutated(id.Name);
+ 
+             return newVal;
+         }
+@@ -756,7 +874,7 @@
+                 return Value.Undefined;
+ 
+             if (changed)
+-                OnVariableMutated();
++                OnVariableMutated(id.Name);
+ 
+             return newVal;
+         }
