@@ -37,6 +37,8 @@ namespace DreamberdInterpreter
         {
             _variables = variables ?? throw new ArgumentNullException(nameof(variables));
             _constStore = constStore ?? throw new ArgumentNullException(nameof(constStore));
+
+            RegisterStdLibDefaultMethods();
         }
 
         private void DebugPrint(Expression expr, Value value)

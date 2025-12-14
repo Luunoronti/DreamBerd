@@ -424,50 +424,7 @@ namespace DreamberdInterpreter
                         Value v = EvaluateExpression(argExpr);
                         Console.WriteLine(v.ToString());
                     }
-
                     return Value.Null;
-                }
-
-                if (string.Equals(name, "readFile", StringComparison.Ordinal))
-                {
-                    return EvaluateReadFileCall(call);
-                }
-
-                if (string.Equals(name, "readLines", StringComparison.Ordinal))
-                {
-                    return EvaluateReadLinesCall(call);
-                }
-
-                if (string.Equals(name, "lines", StringComparison.Ordinal))
-                {
-                    return EvaluateLinesCall(call);
-                }
-
-                if (string.Equals(name, "trim", StringComparison.Ordinal))
-                {
-                    return EvaluateTrimCall(call);
-                }
-
-                if (string.Equals(name, "split", StringComparison.Ordinal))
-                {
-                    return EvaluateSplitCall(call);
-                }
-
-                if (string.Equals(name, "charAt", StringComparison.Ordinal))
-                {
-                    return EvaluateCharAtCall(call);
-                }
-
-                if (string.Equals(name, "slice", StringComparison.Ordinal))
-                {
-                    return EvaluateSliceCall(call);
-                }
-
-                if (string.Equals(name, "toNumber", StringComparison.Ordinal) ||
-                    string.Equals(name, "parseInt", StringComparison.Ordinal) ||
-                    string.Equals(name, "parseNumber", StringComparison.Ordinal))
-                {
-                    return EvaluateToNumberCall(call);
                 }
 
                 if (string.Equals(name, "previous", StringComparison.Ordinal))
@@ -490,11 +447,19 @@ namespace DreamberdInterpreter
                 {
                     return InvokeUserFunction(name, funcDef, call.Arguments);
                 }
-            }
 
-            throw new InterpreterException(
-                "Only the built-in functions print(...), previous(...), next(...), history(...), " +
-                "and user-defined functions are supported at this time.");
+                // std lib
+                if (_stdLibMethods.TryGetValue(name, out var stdFunc))
+                {
+                    return stdFunc(call);
+                }
+
+            }
+            throw new InterpreterException($"Invalid function call.");
+
+            //throw new InterpreterException(
+            //    "Only the built-in functions print(...), previous(...), next(...), history(...), " +
+            //    "and user-defined functions are supported at this time.");
         }
         private Value EvaluatePreviousCall(CallExpression call)
         {
