@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Parser\" />
+    <Folder Include="Evaluator\" />
   </ItemGroup>
 
 </Project>
