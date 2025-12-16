@@ -7,14 +7,8 @@
 
 function assertEq(name, expected, actual) => 
 {
-    if (expected ==== actual) 
-    {
-        print("✅ " + name + ", value: " + actual)!
-    } 
-    else 
-    {
-        print("❌ " + name + "   expected: " + expected + "   actual:   " + actual)!
-    }
+    if (expected ==== actual) print("✅ " + name + ", value: " + actual)!
+    else print("❌ " + name + "   expected: " + expected + "   actual:   " + actual)!
 }!
 
 const const const NORTH_POLE = "🎄"!

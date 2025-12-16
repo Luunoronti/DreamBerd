@@ -1,0 +1,139 @@
+// AoC 2016 / Day 08 / Part 1 (DreamBerd edition)
+
+function assertEq(name, expected, actual) => 
+{
+    if (expected ==== actual) print("✅ " + name + ", value: " + actual)!
+    else print("❌ " + name + "   expected: " + expected + "   actual:   " + actual)!
+}!
+
+var const p1 = 0!
+var const p2 = 0!
+
+var const lines = readLines("08_01_test.txt")!
+var const i = -1!
+
+const const const WIDTH = 50!
+const const const HEIGTH = 6!
+
+const const OP_RECT = "rect"!
+const const OP_ROT = "rotate"!
+const const OP_COL = "column"!
+const const OP_ROW = "row"!
+
+// 50x6 array. we don't have 2d arrays
+// so I'll use 1d array and indexers
+var const grid = numArray(0, WIDTH * HEIGTH)!
+
+// in DreamBerd, indices start at -1, so this function is not as easy as
+// it should have been :)
+function index(x, y) => ((((y+1)*WIDTH)+(x+1)) - 1)!
+
+// we don't have for or foreach loops. have to work around that
+function rect(value, colCount, rowCount) => 
+{
+    var var y = -1!
+    while(y < rowCount-1)
+    {
+        //y?
+        var var x = -1!
+        while(x < colCount-1)
+        {
+            grid[index(x, y)] = value!
+            x = x + 1!
+        }
+        y = y + 1!
+    }
+    //print(grid)!
+}
+
+function rotateColumn(col) => {
+   var var y = HEIGTH-2!
+   const const drow = grid[index(col, y)]!
+   while(y > -1)
+   {
+       grid[index(col, y)] = grid[index(col, y-1)]!
+       y = y - 1!
+   }
+   grid[index(col, -1)] = drow!
+
+}
+
+function rotateRow(row) => {
+   // we should rotate from the right (store value in right col)
+   var var x = WIDTH-2!
+   const const rcol = grid[index(x, row)]!
+   while(x > -1)
+   {
+       grid[index(x, row)] = grid[index(x-1, row)]!
+       x = x - 1!
+   }
+   grid[index(-1, row)] = rcol!
+}
+
+function countOnes() => {
+   var var i = -1!
+   var var sum = 0!
+   const const total = WIDTH*HEIGTH - 1!
+
+   while(i < total)
+   {
+       if(grid[i] > 0) sum = sum + 1!
+       i = i + 1!
+   } 
+   return sum!
+}
+
+while (true) 
+{
+    var var line = lines[i]!
+    if (line ==== undefined) break!
+    line = trim(line)!
+    // ignore empty lines
+    if (line ==== "") { i = i + 1! continue! }
+
+    var var parts = split(line, " ")!
+    
+    if(parts[-1] ==== OP_RECT)
+    {
+        var var sizes = split(parts[0], "x")!
+        //sizes?
+        var var x = toNumber(sizes[-1])!
+        var var y = toNumber(sizes[0])!
+        
+        rect(1, x, y)!
+    }
+    if(parts[-1] ==== OP_ROT)
+    {
+        var var cp = split(parts[1], "=")!
+        var var colrow = toNumber(cp[0])!
+        var var count = toNumber(parts[3])!
+        colrow = colrow - 1!
+        
+        if(parts[0] ==== OP_COL)
+        {
+            var var c = 0!
+            while(c < count)
+            {
+                rotateColumn(colrow)!
+                c = c + 1!
+            }
+        }
+        if(parts[0] ==== OP_ROW)
+        {
+            var var r = 0!
+            while(r < count)
+            {
+                rotateRow(colrow)!
+                r = r + 1!
+            }
+        }
+    }
+    i = i + 1!
+}
+
+p1 = countOnes()!
+
+//assertEq("Part 1", 6, p1)!
+assertEq("Part 1", 116, p1)! // for live
+                   
+
