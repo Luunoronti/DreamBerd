@@ -1,0 +1,2 @@
+# Treat DreamBerd source files as a language GitHub can highlight
+*.dberd text eol=lf linguist-language=JavaScript
