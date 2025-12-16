@@ -4,6 +4,12 @@ Check out the spec here: https://github.com/TodePond/GulfOfMexico
 
 | Requires .NET 10.
 
+Features state:
+<br/>
+PL: https://github.com/Luunoronti/DreamBerd/blob/master/features.md
+<br/>
+EN: https://github.com/Luunoronti/DreamBerd/blob/master/features_en.md
+
 To run:
 1. Clone:
    `git clone https://github.com/Luunoronti/DreamBerd.git`
