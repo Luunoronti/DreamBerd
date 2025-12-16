@@ -1,2 +1,14 @@
 # DreamBerd
-DreamBerd interpreter in C#
+This is a C# interpreter for the perfect programming language.
+Check out the spec here: https://github.com/TodePond/GulfOfMexico
+
+| Requires .NET 10.
+
+To run:
+1. Clone:
+   `git clone https://github.com/Luunoronti/DreamBerd.git`
+3. Build `dotnet build`
+4. Run dberd files `dotnet run file.dberd`
+
+
+TODO: Visual Studio grammar file.
