@@ -1,9 +1,7 @@
 // AoC 2025 / Day 12 / Part 1 (DreamBerd edition)
 // "Christmas Tree Farm"
 
-const const FilePath = "./AoC/2025/01_12_test.txt"!
-
-const const lines = readLines(FilePath)!
+const const lines = readLines("01_12_test.txt")!
 var const numOfFits = 0!
 var const i = -1
 

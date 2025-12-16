@@ -11,16 +11,30 @@ namespace DreamberdInterpreter
             var variables = new VariableStore();
             var evaluator = new Evaluator(variables, constStore);
 
+            Console.OutputEncoding = Encoding.UTF8;
+
             if (args.Length > 0)
             {
                 var path = args[0];
                 var source = File.ReadAllText(path);
-
+                evaluator.CurrentDirectory = Path.GetDirectoryName(path) ?? Environment.CurrentDirectory;
                 try
                 {
                     var time = Stopwatch.GetTimestamp();
                     RunSource(source, evaluator);
-                    Console.WriteLine($"Runtime: {Stopwatch.GetElapsedTime(time)}");
+
+                    Console.ForegroundColor = ConsoleColor.DarkGray;
+
+                    var timeS = $" Runtime: {Format(Stopwatch.GetElapsedTime(time))} ";
+                    // var iotimeS = $"IO: {Format(evaluator.IOTotalTime)}";
+                    // var ml = Math.Max(iotimeS.Length, timeS.Length);
+                    var ml = timeS.Length;
+
+                    Console.WriteLine("".PadLeft(ml, '-'));
+                    Console.WriteLine(timeS);
+                    //Console.WriteLine(iotimeS);
+                    Console.WriteLine("".PadLeft(ml, '-'));
+                    Console.ResetColor();
                 }
                 catch (InterpreterException ex)
                 {
@@ -38,6 +52,34 @@ namespace DreamberdInterpreter
 
             RunRepl(evaluator);
         }
+
+        public static string Format(TimeSpan ts)
+        {
+            // TimeSpan only goes down to ticks (100 ns), so we’ll extend manually
+            long totalNanoseconds = ts.Ticks * 100;
+
+            var units = new (long factor, string suffix)[]
+            {
+            (1000000000, "s"),
+            (1000000,    "ms"),
+            (1000,       "µs"),
+            (1,          "ns")
+            };
+
+            var parts = new List<string>();
+            foreach (var (factor, suffix) in units)
+            {
+                long value = totalNanoseconds / factor;
+                if (value > 0 || parts.Count > 0) // include once we hit the first non-zero
+                {
+                    parts.Add($"{value} {suffix}");
+                    totalNanoseconds %= factor;
+                }
+            }
+
+            return string.Join(" ", parts);
+        }
+
 
         private static void RunSource(string source, Evaluator evaluator)
         {

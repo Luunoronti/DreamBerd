@@ -2,7 +2,7 @@
   "profiles": {
     "DreamBerd": {
       "commandName": "Project",
-      "commandLineArgs": " C:\\Work\\DreamBerd\\dreamberd_tests.dberd"
+      "commandLineArgs": "C:\\Own\\DreamBerd\\AoC\\2025\\01_01.dberd"
     }
   }
 }

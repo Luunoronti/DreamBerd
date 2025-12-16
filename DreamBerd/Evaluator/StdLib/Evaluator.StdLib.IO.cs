@@ -1,10 +1,13 @@
 ﻿// Evaluator.StdLib.IO.cs
+using System.Diagnostics;
+
 namespace DreamberdInterpreter
 {
     public sealed partial class Evaluator
     {
 
-
+        public TimeSpan IOTotalTime { get; private set; }
+        public string CurrentDirectory { get; set; }
 
 
         private Value EvaluateReadFileCall(CallExpression call)
@@ -20,7 +23,12 @@ namespace DreamberdInterpreter
 
             try
             {
+                if (!Path.IsPathFullyQualified(path))
+                    path = CurrentDirectory + "\\" + path;
+
+                var time = Stopwatch.GetTimestamp();
                 string text = File.ReadAllText(path);
+                IOTotalTime += Stopwatch.GetElapsedTime(time);
                 return Value.FromString(text);
             }
             catch (Exception ex)
@@ -42,8 +50,13 @@ namespace DreamberdInterpreter
 
             try
             {
+                if (!Path.IsPathFullyQualified(path))
+                    path = CurrentDirectory + "\\" + path;
                 // ReadAllText + our own splitting keeps behaviour consistent with lines(text)
+                var time = Stopwatch.GetTimestamp();
                 string text = File.ReadAllText(path);
+                IOTotalTime += Stopwatch.GetElapsedTime(time);
+
                 var items = SplitLines(text);
                 return MakeStringArray(items);
             }
