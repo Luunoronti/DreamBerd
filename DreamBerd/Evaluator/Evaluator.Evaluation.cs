@@ -6,6 +6,42 @@ namespace DreamberdInterpreter
 {
     public sealed partial class Evaluator
     {
+        private static readonly Dictionary<string, ulong> NumberUnits = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["zero"] = 0, ["one"] = 1, ["two"] = 2, ["three"] = 3, ["four"] = 4, ["five"] = 5,
+            ["six"] = 6, ["seven"] = 7, ["eight"] = 8, ["nine"] = 9, ["ten"] = 10,
+            ["eleven"] = 11, ["twelve"] = 12, ["thirteen"] = 13, ["fourteen"] = 14,
+            ["fifteen"] = 15, ["sixteen"] = 16, ["seventeen"] = 17, ["eighteen"] = 18, ["nineteen"] = 19
+        };
+
+        private static readonly Dictionary<string, ulong> NumberTens = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["twenty"] = 20, ["thirty"] = 30, ["forty"] = 40, ["fifty"] = 50,
+            ["sixty"] = 60, ["seventy"] = 70, ["eighty"] = 80, ["ninety"] = 90
+        };
+
+        private static readonly Dictionary<string, ulong> NumberScales = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["thousand"] = 1_000,
+            ["million"] = 1_000_000,
+            ["billion"] = 1_000_000_000,
+            ["trillion"] = 1_000_000_000_000,
+            ["quadrillion"] = 1_000_000_000_000_000,
+            ["quintillion"] = 1_000_000_000_000_000_000
+        };
+
+        private static readonly Dictionary<string, string> NumberAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["hundret"] = "hundred",
+            ["hundrets"] = "hundred",
+            ["hundreds"] = "hundred",
+            ["milion"] = "million",
+            ["milions"] = "million",
+            ["thounsand"] = "thousand",
+            ["thounsands"] = "thousand",
+            ["thousandths"] = "thousand"
+        };
+
         private Value EvaluateExpression(Expression expression)
         {
             Value result;
@@ -602,6 +638,8 @@ case TryAgainStatement tas:
                 case ValueKind.String:
                     if (double.TryParse(x.String ?? string.Empty, NumberStyles.Float, CultureInfo.InvariantCulture, out double d))
                         return Value.FromNumber(d);
+                    if (TryParseNumberWords(x.String ?? string.Empty, out double fromWords))
+                        return Value.FromNumber(fromWords);
                     return Value.Undefined;
 
                 case ValueKind.Null:
@@ -625,6 +663,100 @@ case TryAgainStatement tas:
             }
 
             return Value.FromArray(dict);
+        }
+
+        private bool TryParseNumberWords(string text, out double number)
+        {
+            number = 0;
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            string[] rawWords = text.Replace("-", " ").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+
+            ulong total = 0;
+            ulong chunk = 0;
+            bool sawAny = false;
+
+            try
+            {
+                foreach (var rawWord in rawWords)
+                {
+                    string word = NormalizeNumberWord(rawWord);
+
+                    if (string.Equals(word, "and", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (NumberUnits.TryGetValue(word, out var unit))
+                    {
+                        checked { chunk += unit; }
+                        sawAny = true;
+                        continue;
+                    }
+
+                    if (NumberTens.TryGetValue(word, out var tens))
+                    {
+                        checked { chunk += tens; }
+                        sawAny = true;
+                        continue;
+                    }
+
+                    if (string.Equals(word, "hundred", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (chunk == 0)
+                            return false;
+
+                        checked { chunk *= 100; }
+                        sawAny = true;
+                        continue;
+                    }
+
+                    if (NumberScales.TryGetValue(word, out var scale))
+                    {
+                        if (chunk == 0)
+                            return false;
+
+                        checked
+                        {
+                            chunk *= scale;
+                            total += chunk;
+                        }
+                        chunk = 0;
+                        sawAny = true;
+                        continue;
+                    }
+
+                    // nieznane slowo => nie parsujemy (zostajemy przy Undefined)
+                    return false;
+                }
+
+                checked { total += chunk; }
+                if (!sawAny)
+                    return false;
+
+                number = total;
+                return true;
+            }
+            catch (OverflowException)
+            {
+                return false;
+            }
+        }
+
+        private string NormalizeNumberWord(string raw)
+        {
+            string w = raw;
+
+            if (NumberAliases.TryGetValue(w, out var alias))
+                w = alias;
+
+            if (w.Length > 1 && w.EndsWith("s", StringComparison.OrdinalIgnoreCase))
+            {
+                string trimmed = w.Substring(0, w.Length - 1);
+                if (NumberUnits.ContainsKey(trimmed) || NumberTens.ContainsKey(trimmed) || NumberScales.ContainsKey(trimmed) || string.Equals(trimmed, "hundred", StringComparison.OrdinalIgnoreCase))
+                    w = trimmed;
+            }
+
+            return w;
         }
     }
 }

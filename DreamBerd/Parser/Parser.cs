@@ -6,7 +6,74 @@ namespace DreamberdInterpreter
         private readonly IReadOnlyList<Token> _tokens;
         private int _current;
 
-        public Parser(IReadOnlyList<Token> tokens) => _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
+        private readonly Stack<HashSet<string>> _scopeStack = new Stack<HashSet<string>>();
+
+        private static readonly Dictionary<string, ulong> NumberUnits = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["zero"] = 0,
+            ["one"] = 1,
+            ["two"] = 2,
+            ["three"] = 3,
+            ["four"] = 4,
+            ["five"] = 5,
+            ["six"] = 6,
+            ["seven"] = 7,
+            ["eight"] = 8,
+            ["nine"] = 9,
+            ["ten"] = 10,
+            ["eleven"] = 11,
+            ["twelve"] = 12,
+            ["thirteen"] = 13,
+            ["fourteen"] = 14,
+            ["fifteen"] = 15,
+            ["sixteen"] = 16,
+            ["seventeen"] = 17,
+            ["eighteen"] = 18,
+            ["nineteen"] = 19
+        };
+
+        private static readonly Dictionary<string, ulong> NumberTens = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["twenty"] = 20,
+            ["thirty"] = 30,
+            ["forty"] = 40,
+            ["fifty"] = 50,
+            ["sixty"] = 60,
+            ["seventy"] = 70,
+            ["eighty"] = 80,
+            ["ninety"] = 90
+        };
+
+        private static readonly Dictionary<string, ulong> NumberScales = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["thousand"] = 1_000,
+            ["million"] = 1_000_000,
+            ["billion"] = 1_000_000_000,
+            ["trillion"] = 1_000_000_000_000,
+            ["quadrillion"] = 1_000_000_000_000_000,
+            ["quintillion"] = 1_000_000_000_000_000_000 // max w ulong
+        };
+
+        // aliasy / najczestsze literowki, zanim trafimy do wlasciwych slownikow
+        private static readonly Dictionary<string, string> NumberAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["hundret"] = "hundred",
+            ["hundrets"] = "hundred",
+            ["hundreds"] = "hundred",
+
+            ["milion"] = "million",   // pl-lite
+            ["milions"] = "million",
+
+            ["thounsand"] = "thousand",
+            ["thounsands"] = "thousand",
+            ["thousandths"] = "thousand", // pelny plural - tez sprowadzamy
+        };
+
+        public Parser(IReadOnlyList<Token> tokens)
+        {
+            _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
+            PushScope(); // global scope
+        }
 
         private bool IsAtEnd() => Peek().Type == TokenType.EndOfFile;
 
@@ -46,6 +113,27 @@ namespace DreamberdInterpreter
             if (Check(type)) return Advance();
             var t = Peek();
             throw new InterpreterException(message + $" Found '{t.Lexeme}'.", t.Position);
+        }
+
+        private void PushScope() => _scopeStack.Push(new HashSet<string>(StringComparer.Ordinal));
+
+        private void PopScope() => _scopeStack.Pop();
+
+        private void DeclareName(string name)
+        {
+            if (_scopeStack.Count == 0)
+                PushScope();
+            _scopeStack.Peek().Add(name);
+        }
+
+        private bool IsNameShadowed(string name)
+        {
+            foreach (var scope in _scopeStack)
+            {
+                if (scope.Contains(name))
+                    return true;
+            }
+            return false;
         }
 
         public List<Statement> ParseProgram()
@@ -180,15 +268,23 @@ namespace DreamberdInterpreter
 
         private Statement ParseBlockStatementAfterOpeningBrace(int position)
         {
+            PushScope();
             var statements = new List<Statement>();
 
-            while (!Check(TokenType.RightBrace) && !IsAtEnd())
+            try
             {
-                statements.Add(ParseStatement());
-            }
+                while (!Check(TokenType.RightBrace) && !IsAtEnd())
+                {
+                    statements.Add(ParseStatement());
+                }
 
-            Consume(TokenType.RightBrace, "Expected '}' to close block.");
-            return new BlockStatement(statements, position);
+                Consume(TokenType.RightBrace, "Expected '}' to close block.");
+                return new BlockStatement(statements, position);
+            }
+            finally
+            {
+                PopScope();
+            }
         }
 
         private TerminatorInfo ParseTerminator()
@@ -232,42 +328,52 @@ namespace DreamberdInterpreter
 
             Token nameTok = Consume(TokenType.Identifier, "Expected function name.");
             string name = nameTok.Lexeme;
+            DeclareName(name); // nazwa funkcji widoczna w otaczajacym scope
 
-            Consume(TokenType.LeftParen, "Expected '(' after function name.");
-
-            var parameters = new List<string>();
-            if (!Check(TokenType.RightParen))
+            PushScope(); // scope funkcji (parametry + cialo)
+            try
             {
-                do
+                Consume(TokenType.LeftParen, "Expected '(' after function name.");
+
+                var parameters = new List<string>();
+                if (!Check(TokenType.RightParen))
                 {
-                    Token paramTok = Consume(TokenType.Identifier, "Expected parameter name.");
-                    parameters.Add(paramTok.Lexeme);
+                    do
+                    {
+                        Token paramTok = Consume(TokenType.Identifier, "Expected parameter name.");
+                        parameters.Add(paramTok.Lexeme);
+                        DeclareName(paramTok.Lexeme);
+                    }
+                    while (Match(TokenType.Comma));
                 }
-                while (Match(TokenType.Comma));
+
+                Consume(TokenType.RightParen, "Expected ')' after function parameters.");
+                Consume(TokenType.Arrow, "Expected '=>' after function parameter list.");
+
+                // body: albo expression (stary styl), albo blok { ... }
+                Statement bodyStmt;
+                if (Match(TokenType.LeftBrace))
+                {
+                    int blockPos = Previous().Position;
+                    bodyStmt = ParseBlockStatementAfterOpeningBrace(blockPos);
+                }
+                else
+                {
+                    // Dla kompatybilnosci: function f(x) => expr!
+                    // zachowuje sie jak "return expr".
+                    Expression bodyExpr = ParseExpression();
+                    bodyStmt = new ReturnStatement(bodyExpr, bodyExpr.Position);
+                }
+
+                bool isDebug = ParseTerminatorIsDebug(); // na razie ignorujemy isDebug
+                _ = isDebug;
+
+                return new FunctionDeclarationStatement(name, parameters, bodyStmt, funcPos);
             }
-
-            Consume(TokenType.RightParen, "Expected ')' after function parameters.");
-            Consume(TokenType.Arrow, "Expected '=>' after function parameter list.");
-
-            // body: albo expression (stary styl), albo blok { ... }
-            Statement bodyStmt;
-            if (Match(TokenType.LeftBrace))
+            finally
             {
-                int blockPos = Previous().Position;
-                bodyStmt = ParseBlockStatementAfterOpeningBrace(blockPos);
+                PopScope();
             }
-            else
-            {
-                // Dla kompatybilności: function f(x) => expr!
-                // zachowuje się jak "return expr".
-                Expression bodyExpr = ParseExpression();
-                bodyStmt = new ReturnStatement(bodyExpr, bodyExpr.Position);
-            }
-
-            bool isDebug = ParseTerminatorIsDebug(); // na razie ignorujemy isDebug
-            _ = isDebug;
-
-            return new FunctionDeclarationStatement(name, parameters, bodyStmt, funcPos);
         }
 
         private Statement ParseReturnStatementAfterKeyword(int position)
@@ -934,13 +1040,42 @@ Expression ParsePower()
                 return new LiteralExpression(Value.FromString(text), t.Position);
             }
 
-            if (Match(TokenType.Identifier))
+
+            if (Check(TokenType.Identifier))
             {
+                int savedIndex = _current;
+                if (TryParseNumberNameLiteral(out var numValue, out var consumed, out var litPos, out var fallbackToString, out var fallbackStart))
+                {
+                    _current += consumed;
+                    return new LiteralExpression(Value.FromNumber((double)numValue), litPos);
+                }
+
+                if (fallbackToString)
+                {
+                    int j = fallbackStart;
+                    var parts = new List<string>();
+                    while (j < _tokens.Count &&
+                           _tokens[j].Type != TokenType.Bang &&
+                           _tokens[j].Type != TokenType.Question &&
+                           _tokens[j].Type != TokenType.EndOfFile)
+                    {
+                        parts.Add(_tokens[j].Lexeme);
+                        j++;
+                    }
+
+                    _current = j;
+                    string raw = string.Join(" ", parts);
+                    return new LiteralExpression(Value.FromString(raw), litPos);
+                }
+
+                _current = savedIndex;
+                Advance();
+
                 var t = Previous();
                 string name = t.Lexeme;
                 int pos = t.Position;
 
-                // Booleany i undefined jako literały Dreamberda
+                // Booleany i undefined jako literaly Dreamberda
                 switch (name)
                 {
                     case "true":
@@ -980,6 +1115,113 @@ Expression ParsePower()
             }
 
             throw new InterpreterException($"Unexpected token '{Peek().Lexeme}'.", Peek().Position);
+        }
+
+        private bool TryParseNumberNameLiteral(out ulong value, out int consumedTokens, out int literalPosition, out bool fallbackToString, out int fallbackStartIndex)
+        {
+            value = 0;
+            consumedTokens = 0;
+            literalPosition = Peek().Position;
+            fallbackToString = false;
+            fallbackStartIndex = _current;
+
+            ulong chunk = 0;
+            int i = _current;
+            bool sawAny = false;
+
+            while (i < _tokens.Count && _tokens[i].Type == TokenType.Identifier)
+            {
+                string raw = _tokens[i].Lexeme;
+                string word = NormalizeNumberWord(raw);
+
+                // jezeli slowo jest juz zarezerwowane w scope (zmienna/funkcja), to nie robimy z niego liczby
+                if (IsNameShadowed(word))
+                    return false;
+
+                if (string.Equals(word, "and", StringComparison.OrdinalIgnoreCase))
+                {
+                    i++;
+                    consumedTokens++;
+                    continue;
+                }
+
+                if (NumberUnits.TryGetValue(word, out var unit))
+                {
+                    checked { chunk += unit; }
+                    i++;
+                    consumedTokens++;
+                    sawAny = true;
+                    continue;
+                }
+
+                if (NumberTens.TryGetValue(word, out var tens))
+                {
+                    checked { chunk += tens; }
+                    i++;
+                    consumedTokens++;
+                    sawAny = true;
+                    continue;
+                }
+
+                if (string.Equals(word, "hundred", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (chunk == 0)
+                        return false;
+
+                    checked { chunk *= 100; }
+                    i++;
+                    consumedTokens++;
+                    sawAny = true;
+                    continue;
+                }
+
+                if (NumberScales.TryGetValue(word, out var scale))
+                {
+                    if (chunk == 0)
+                        return false;
+
+                    checked
+                    {
+                        chunk *= scale;
+                        value += chunk;
+                    }
+                    chunk = 0;
+                    i++;
+                    consumedTokens++;
+                    sawAny = true;
+                    continue;
+                }
+
+                // Nieznane slowo: jesli juz bylismy w srodku liczby, to przechodzimy na tryb fallback (string).
+                if (sawAny)
+                {
+                    fallbackToString = true;
+                    return false;
+                }
+
+                return false; // na startowym slowie: to nie jest liczba
+            }
+
+            checked { value += chunk; }
+            return consumedTokens > 0;
+        }
+
+        private string NormalizeNumberWord(string raw)
+        {
+            string w = raw;
+
+            if (NumberAliases.TryGetValue(w, out var alias))
+                w = alias;
+
+            // "thousandS", "millionS" itd. - zdejmujemy pojedyncze 's' z konca
+            if (w.Length > 1 && w.EndsWith("s", StringComparison.OrdinalIgnoreCase))
+            {
+                string trimmed = w.Substring(0, w.Length - 1);
+                if (NumberUnits.ContainsKey(trimmed) || NumberTens.ContainsKey(trimmed) || NumberScales.ContainsKey(trimmed) || string.Equals(trimmed, "hundred", StringComparison.OrdinalIgnoreCase))
+                    w = trimmed;
+            }
+
+            return w;
         }
     }
 }

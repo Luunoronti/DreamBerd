@@ -174,7 +174,7 @@ Legenda:
 - ❌ `delete class!`, `delete delete!` itd. (kasowanie słów kluczowych / paradygmatów).
 
 ### Inne
-- ❌ „Number names” typu `one`, `two`.
+- ⚠️ „Number names” (angielskie slowa `zero`..`nineteen`, dziesiatki `twenty`..`ninety`, skale do `quintillion`; aliasy `milion`, `hundret`, `thounsand`/`thounsands`/plurale) parsujemy na literal **tylko jesli slowo nie jest nazwa w aktualnym scope**. Brak ulamkow / `twenty-one` / polskiej wersji.
 - ❌ Rozbudowane „naming” (np. deklaracje ze stringową nazwą, nazwy będące cyframi, itp.).
 
 

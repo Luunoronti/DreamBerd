@@ -174,7 +174,7 @@ Legend:
 - ❌ `delete class!`, `delete delete!`, etc. (deleting keywords / paradigms).
 
 ### Other
-- ❌ “Number names” like `one`, `two`.
+- ⚠️ “Number names”: English words `zero`..`nineteen`, tens `twenty`..`ninety`, scales up to `quintillion`; parsed as a numeric literal **only if the word is not a variable in scope**. No fractions / `twenty-one` / Polish version yet.
 - ❌ Extended “naming” (e.g. declarations with string names, names being digits, etc.).
 
 
