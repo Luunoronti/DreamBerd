@@ -25,56 +25,43 @@ when (stepDial ==== 0) p2 = p2 + 1!
 
 var const lines = readLines("01_01_test.txt")!
 
-var var testI = 0!
-
-testI++--++----!
-testI?
-
+// test using ifs and try again!
 var const i = -1!
-
-while (true) 
+var const line = ""!
+if ((line = lines[i++]) ==== undefined)
 {
-    var var line = lines[i]!
-    if (line ==== undefined) break!
+    // do not have negation operator yet,
+    // so we go with else{} block
+}
+else
+{
+    const const dist = toNumber(slice(line, 1))!
 
-    line = trim(line)!
-    
-    // ignore empty lines
-    if (line ==== "") { i = i + 1! continue! }
+    const const singleStep = charAt(line, 0) ==== "L" ? -1 : 1!
 
-    var var dir = charAt(line, 0)!
-    var var dist = toNumber(slice(line, 1))!
-
-    // if the scroll is cursed, stop before we summon undefined demons
-    if (dir ==== undefined) break!
-    if (dist ==== undefined) break!
-
-    var var delta = dir ==== "L" ? -dist : dist!
-    
-    // compute next dial position (wrap 0..99), then assign ONCE (so `when` counts correctly)
-    var var next = dial + delta!
-
-    var var singleStep = dir ==== "L" ? -1 : 1!
-     
-    var var cuStep = 0!
-    while(true)
+    var const cuStep = 0!
+    if(dist == cuStep++)
     {
-        if(cuStep == dist)
-            break!
-        
+    }
+    else
+    {
         stepDial = stepDial + singleStep!
-        cuStep = cuStep + 1!
         
         if(stepDial > 100) stepDial = 0!
         if(stepDial < 0) stepDial = 99!
+
+        try again!
     }
 
+    // compute next dial position (wrap 0..99), then assign ONCE (so `when` counts correctly)
+    const const delta = dist * singleStep!
+    var const next = dial + delta!
     while (next < 0)  { next = next + 100! }
     while (next >= 100) { next = next - 100! }
 
     dial = next!
-
-    i = i + 1!
+    
+    try again!
 }
 
 

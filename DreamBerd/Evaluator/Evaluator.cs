@@ -431,6 +431,145 @@ namespace DreamberdInterpreter
             throw new InterpreterException("Postfix ++/-- target must be an identifier or an array index.", update.Position);
         }
 
+        private Value EvaluatePowerStars(PowerStarsExpression pow)
+        {
+            // Postfix semantics (like x++): return OLD numeric value, then write back x = x^Exponent.
+            // Supports identifiers and arr[index] (same as PostfixUpdateExpression).
+
+            int exp = pow.Exponent;
+            if (exp < 0)
+                throw new InterpreterException("Invalid '**' exponent.", pow.Position);
+
+            // x** / x**** / ...
+            if (pow.Target is IdentifierExpression id)
+            {
+                if (_constStore.TryGet(id.Name, out _))
+                    throw new InterpreterException($"Cannot update const const const variable '{id.Name}'.", pow.Position);
+
+                bool isLocal = false;
+                Value current;
+
+                if (_callStack.Count > 0 && _callStack.Peek().Locals.TryGetValue(id.Name, out var localVal))
+                {
+                    isLocal = true;
+                    current = localVal;
+                }
+                else
+                {
+                    if (!_variables.TryGet(id.Name, out current))
+                        throw new InterpreterException($"Variable '{id.Name}' is not defined.", pow.Position);
+                }
+
+                double oldNum = ToNumberAt(current, pow.Position);
+
+                double powered = Math.Pow(oldNum, exp);
+                Value newValue = (double.IsNaN(powered) || double.IsInfinity(powered))
+                    ? Value.Undefined
+                    : Value.FromNumber(powered);
+
+                if (isLocal)
+                    _callStack.Peek().Locals[id.Name] = newValue;
+                else
+                    _variables.Assign(id.Name, newValue, _currentStatementIndex);
+
+                OnVariableMutated(id.Name);
+                return Value.FromNumber(oldNum);
+            }
+
+            // arr[index]** / arr[index]**** / ...
+            if (pow.Target is IndexExpression ix)
+            {
+                if (ix.Target is not IdentifierExpression arrId)
+                    throw new InterpreterException("Postfix '**' on indexing is only supported for identifier arrays (e.g. arr[i]**).", pow.Position);
+
+                if (_constStore.TryGet(arrId.Name, out _))
+                    throw new InterpreterException($"Cannot update const const const variable '{arrId.Name}'.", pow.Position);
+
+                bool isLocal = false;
+                Value arrayValue;
+
+                if (_callStack.Count > 0 && _callStack.Peek().Locals.TryGetValue(arrId.Name, out var localArr))
+                {
+                    isLocal = true;
+                    arrayValue = localArr;
+                }
+                else
+                {
+                    if (!_variables.TryGet(arrId.Name, out arrayValue))
+                        throw new InterpreterException($"Variable '{arrId.Name}' is not defined.", pow.Position);
+                }
+
+                if (arrayValue.Kind != ValueKind.Array || arrayValue.Array == null)
+                    throw new InterpreterException("Indexing power update is only supported on arrays.", pow.Position);
+
+                Value indexVal = EvaluateExpression(ix.Index);
+                double index = ToNumberAt(indexVal, ix.Index.Position);
+
+                if (!arrayValue.Array.TryGetValue(index, out var elem))
+                    elem = Value.Undefined;
+
+                double oldNum = ToNumberAt(elem, pow.Position);
+
+                double powered = Math.Pow(oldNum, exp);
+                Value newElem = (double.IsNaN(powered) || double.IsInfinity(powered))
+                    ? Value.Undefined
+                    : Value.FromNumber(powered);
+
+                var dict = new Dictionary<double, Value>(arrayValue.Array);
+                dict[index] = newElem;
+                Value newArrayValue = Value.FromArray(dict);
+
+                if (isLocal)
+                    _callStack.Peek().Locals[arrId.Name] = newArrayValue;
+                else
+                    _variables.Assign(arrId.Name, newArrayValue, _currentStatementIndex);
+
+                OnVariableMutated(arrId.Name);
+                return Value.FromNumber(oldNum);
+            }
+
+            throw new InterpreterException("Postfix '**' target must be an identifier or an array index.", pow.Position);
+        }
+
+
+        private Value EvaluatePrefixRoot(PrefixRootExpression root)
+        {
+            double x = ToNumberAt(EvaluateExpression(root.Operand), root.Position);
+            int n = root.Degree;
+
+            if (n <= 0)
+                return Value.Undefined;
+
+            // Even root of a negative number => undefined (DreamBerd vibe)
+            if ((n % 2) == 0 && x < 0)
+                return Value.Undefined;
+
+            double abs = Math.Abs(x);
+            double r = Math.Pow(abs, 1.0 / n);
+            if (x < 0) r = -r;
+
+            if (double.IsNaN(r) || double.IsInfinity(r))
+                return Value.Undefined;
+
+            return Value.FromNumber(r);
+        }
+
+        private Value EvaluateRootInfix(RootInfixExpression root)
+        {
+            double a = ToNumberAt(EvaluateExpression(root.Radicand), root.Position);
+            double n = ToNumberAt(EvaluateExpression(root.Degree), root.Position);
+
+            if (n == 0)
+                return Value.Undefined;
+
+            double r = Math.Pow(a, 1.0 / n);
+
+            if (double.IsNaN(r) || double.IsInfinity(r))
+                return Value.Undefined;
+
+            return Value.FromNumber(r);
+        }
+
 
         private void MarkDeleted(Value value, int position)
         {

@@ -170,13 +170,32 @@ namespace DreamberdInterpreter
                     else
                         AddToken(TokenType.Minus);
                     break;
-                case '*':
-                    AddToken(TokenType.Star);
-                    break;
-                case '/':
+                
+case '*':
+{
+    // '*' is normal multiply, but '**' and more is postfix power (StarRun)
+    int count = 1;
+    while (Match('*'))
+        count++;
+
+    if (count == 1)
+        AddToken(TokenType.Star);
+    else
+        AddToken(TokenType.StarRun);
+
+    break;
+}case '/':
                     AddToken(TokenType.Slash);
                     break;
-                case '<':
+                
+case '\\':
+    if (Match('\\'))
+        AddToken(TokenType.Root);
+    else
+        throw new InterpreterException("Expected \\\\ (double backslash) for root operator.", _start);
+    break;
+
+case '<':
                     if (Match('='))
                         AddToken(TokenType.LessEqual);
                     else

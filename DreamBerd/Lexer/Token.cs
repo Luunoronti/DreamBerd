@@ -41,7 +41,10 @@ namespace DreamberdInterpreter
         Minus,
         MinusMinus,
         Star,
+        StarRun,
         Slash,
+
+        Root,
 
         Less,
         LessEqual,

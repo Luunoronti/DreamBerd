@@ -411,7 +411,46 @@ namespace DreamberdInterpreter
     }
 
 
-    public sealed class ConditionalExpression : Expression
+        public sealed class PowerStarsExpression : Expression
+    {
+        public Expression Target { get; }
+        public int Exponent { get; } // 2 for **, 3 for ***, ...
+
+        public PowerStarsExpression(Expression target, int exponent, int position)
+            : base(position)
+        {
+            Target = target ?? throw new ArgumentNullException(nameof(target));
+            Exponent = exponent;
+        }
+    }
+
+    public sealed class PrefixRootExpression : Expression
+    {
+        public Expression Operand { get; }
+        public int Degree { get; } // 2 => sqrt, 3 => cbrt, ...
+
+        public PrefixRootExpression(Expression operand, int degree, int position)
+            : base(position)
+        {
+            Operand = operand ?? throw new ArgumentNullException(nameof(operand));
+            Degree = degree;
+        }
+    }
+
+    public sealed class RootInfixExpression : Expression
+    {
+        public Expression Radicand { get; }
+        public Expression Degree { get; }
+
+        public RootInfixExpression(Expression radicand, Expression degree, int position)
+            : base(position)
+        {
+            Radicand = radicand ?? throw new ArgumentNullException(nameof(radicand));
+            Degree = degree ?? throw new ArgumentNullException(nameof(degree));
+        }
+    }
+
+public sealed class ConditionalExpression : Expression
     {
         public Expression Condition { get; }
         public Expression WhenTrue { get; }

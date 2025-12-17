@@ -678,22 +678,23 @@ namespace DreamberdInterpreter
             return expr;
         }
 
-        private Expression ParseFactor()
+        private
+Expression ParseFactor()
         {
-            Expression expr = ParseUnary();
+            Expression expr = ParsePower();
 
             while (true)
             {
                 if (Match(TokenType.Star))
                 {
                     int pos = Previous().Position;
-                    Expression right = ParseUnary();
+                    Expression right = ParsePower();
                     expr = new BinaryExpression(expr, BinaryOperator.Multiply, right, pos);
                 }
                 else if (Match(TokenType.Slash))
                 {
                     int pos = Previous().Position;
-                    Expression right = ParseUnary();
+                    Expression right = ParsePower();
                     expr = new BinaryExpression(expr, BinaryOperator.Divide, right, pos);
                 }
                 else
@@ -705,8 +706,43 @@ namespace DreamberdInterpreter
             return expr;
         }
 
-        private Expression ParseUnary()
+        private
+
+Expression ParsePower()
         {
+            Expression left = ParseUnary();
+
+            // Infix nth-root: a \\ b  => b-th root of a
+            while (Match(TokenType.Root))
+            {
+                int pos = Previous().Position;
+                Expression degreeExpr = ParseUnary();
+                left = new RootInfixExpression(left, degreeExpr, pos);
+            }
+
+            return left;
+        }
+
+        Expression ParseUnary()
+        {
+            // Root prefix: \x, \\x, \\\x, ...
+            int rootCount = 0;
+            int rootPos = -1;
+
+            while (Match(TokenType.Root))
+            {
+                if (rootPos < 0) rootPos = Previous().Position;
+                rootCount++;
+            }
+
+            if (rootCount > 0)
+            {
+                // 1x "\\" => degree 2 (sqrt), 2x => degree 3 (cbrt), ...
+                int degree = rootCount + 1;
+                Expression operand = ParseUnary(); // binds to the right
+                return new PrefixRootExpression(operand, degree, rootPos);
+            }
+
             if (Match(TokenType.Minus))
             {
                 int pos = Previous().Position;
@@ -754,6 +790,34 @@ namespace DreamberdInterpreter
                 }
 
                 break;
+            }
+
+
+            // postfix power UPDATE: **, ****, ******, ...
+            // DreamBerd twist (like ++++): operator is repeated "**" pairs.
+            // Exponent = 1 + (starCount / 2).
+            // Examples:
+            //   x**       => x becomes x^2
+            //   x****     => x becomes x^3
+            //   x******   => x becomes x^4
+            // Returns OLD numeric value (postfix semantics), then writes back the powered value.
+            while (Match(TokenType.StarRun))
+            {
+                var tok = Previous();
+                int starCount = tok.Lexeme.Length;
+
+                if (starCount < 2)
+                    throw new InterpreterException("Invalid '**' operator.", tok.Position);
+
+                if ((starCount & 1) != 0)
+                    throw new InterpreterException("Power operator requires an even number of '*' (it's repeated \"**\").", tok.Position);
+
+                int exponent = 1 + (starCount / 2);
+
+                if (expr is not IdentifierExpression && expr is not IndexExpression)
+                    throw new InterpreterException("Postfix '**' power update requires an assignable target (variable or arr[index]).", tok.Position);
+
+                expr = new PowerStarsExpression(expr, exponent, tok.Position);
             }
 
             // 2) Potem postfix update chain: pozwalamy mieszać ++ i --

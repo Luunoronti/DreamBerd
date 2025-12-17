@@ -52,6 +52,18 @@ namespace DreamberdInterpreter
                     result = EvaluatePostfixUpdate(post);
                     break;
 
+                case PowerStarsExpression powStars:
+                    result = EvaluatePowerStars(powStars);
+                    break;
+
+                case PrefixRootExpression rootPrefix:
+                    result = EvaluatePrefixRoot(rootPrefix);
+                    break;
+
+                case RootInfixExpression rootInfix:
+                    result = EvaluateRootInfix(rootInfix);
+                    break;
+
                 case ConditionalExpression condExpr:
                     result = EvaluateConditional(condExpr);
                     break;
