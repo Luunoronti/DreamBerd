@@ -147,6 +147,9 @@ namespace DreamberdInterpreter
                 case ',':
                     AddToken(TokenType.Comma);
                     break;
+                case ';':
+                    AddToken(TokenType.Semicolon);
+                    break;
                 case ':':
                     AddToken(TokenType.Colon);
                     break;

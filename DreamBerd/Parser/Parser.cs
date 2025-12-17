@@ -743,6 +743,14 @@ Expression ParsePower()
                 return new PrefixRootExpression(operand, degree, rootPos);
             }
 
+
+            if (Match(TokenType.Semicolon))
+            {
+                int pos = Previous().Position;
+                Expression right = ParseUnary();
+                return new UnaryExpression(UnaryOperator.Not, right, pos);
+            }
+
             if (Match(TokenType.Minus))
             {
                 int pos = Previous().Position;

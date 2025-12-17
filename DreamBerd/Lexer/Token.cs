@@ -30,6 +30,7 @@ namespace DreamberdInterpreter
         LeftBrace,
         RightBrace,
         Comma,
+        Semicolon,
         Colon,
 
         Bang,

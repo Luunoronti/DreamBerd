@@ -3,7 +3,8 @@ namespace DreamberdInterpreter
 {
     public enum UnaryOperator
     {
-        Negate
+        Negate,
+        Not
     }
 
     public enum BinaryOperator

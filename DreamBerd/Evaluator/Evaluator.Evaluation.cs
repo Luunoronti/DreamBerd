@@ -299,11 +299,33 @@ case TryAgainStatement tas:
         {
             Value operand = EvaluateExpression(unary.Operand);
 
-            return unary.Operator switch
+            switch (unary.Operator)
             {
-                UnaryOperator.Negate => Value.FromNumber(-ToNumberAt(operand, unary.Operand.Position)),
-                _ => throw new InterpreterException($"Unsupported unary operator {unary.Operator}.", unary.Position)
-            };
+                case UnaryOperator.Negate:
+                    return Value.FromNumber(-ToNumberAt(operand, unary.Operand.Position));
+
+                case UnaryOperator.Not:
+                    // DreamBerd boolean negation operator ';'
+                    // true -> false, false -> true, maybe -> maybe, undefined -> undefined
+                    if (operand.Kind == ValueKind.Boolean)
+                    {
+                        return operand.Bool switch
+                        {
+                            BooleanState.True => Value.FromBooleanState(BooleanState.False),
+                            BooleanState.False => Value.FromBooleanState(BooleanState.True),
+                            BooleanState.Maybe => Value.FromBooleanState(BooleanState.Maybe),
+                            _ => Value.FromBooleanState(BooleanState.False)
+                        };
+                    }
+
+                    if (operand.Kind == ValueKind.Undefined)
+                        return Value.Undefined;
+
+                    throw new InterpreterException("Negation ';' expects a boolean (true/false/maybe) or undefined.", unary.Position);
+
+                default:
+                    throw new InterpreterException($"Unsupported unary operator {unary.Operator}.", unary.Position);
+            }
         }
 
         private Value EvaluateBinary(BinaryExpression binary)
