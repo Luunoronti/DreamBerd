@@ -325,6 +325,113 @@ namespace DreamberdInterpreter
             return element;
         }
 
+        private Value EvaluatePostfixUpdate(PostfixUpdateExpression update)
+        {
+            // Postfix semantics: return the OLD numeric value, then apply the mutation.
+            // Supports:
+            //   - x++ / x-- (incl. x++++ etc. via update.Delta)
+            //   - arr[i]++ / arr[i]-- (only when arr is an identifier)
+
+            if (update.Delta == 0)
+                throw new InterpreterException("Invalid postfix update (delta = 0).", update.Position);
+
+            // Identifier target: x++ / x--
+            if (update.Target is IdentifierExpression id)
+            {
+                if (_constStore.TryGet(id.Name, out _))
+                    throw new InterpreterException($"Cannot update const const const variable '{id.Name}'.", update.Position);
+
+                bool isLocal = false;
+                Value current;
+
+                if (_callStack.Count > 0 && _callStack.Peek().Locals.TryGetValue(id.Name, out var localVal))
+                {
+                    isLocal = true;
+                    current = localVal;
+                }
+                else
+                {
+                    if (!_variables.TryGet(id.Name, out current))
+                        throw new InterpreterException($"Variable '{id.Name}' is not defined.", update.Position);
+                }
+
+                double oldNum = ToNumberAt(current, update.Position);
+                double newNum = oldNum + update.Delta;
+
+                var newValue = Value.FromNumber(newNum);
+
+                if (isLocal)
+                {
+                    _callStack.Peek().Locals[id.Name] = newValue;
+                }
+                else
+                {
+                    _variables.Assign(id.Name, newValue, _currentStatementIndex);
+                }
+
+                OnVariableMutated(id.Name);
+                return Value.FromNumber(oldNum);
+            }
+
+            // Index target: arr[i]++ / arr[i]--
+            if (update.Target is IndexExpression ix)
+            {
+                // To be assignable, the array base must be an identifier (same rule as IndexAssignmentExpression).
+                if (ix.Target is not IdentifierExpression arrId)
+                    throw new InterpreterException("Postfix ++/-- on indexing is only supported for identifier arrays (e.g. arr[i]++).", update.Position);
+
+                if (_constStore.TryGet(arrId.Name, out _))
+                    throw new InterpreterException($"Cannot update const const const variable '{arrId.Name}'.", update.Position);
+
+                bool isLocal = false;
+                Value arrayValue;
+
+                if (_callStack.Count > 0 && _callStack.Peek().Locals.TryGetValue(arrId.Name, out var localArr))
+                {
+                    isLocal = true;
+                    arrayValue = localArr;
+                }
+                else
+                {
+                    if (!_variables.TryGet(arrId.Name, out arrayValue))
+                        throw new InterpreterException($"Variable '{arrId.Name}' is not defined.", update.Position);
+                }
+
+                if (arrayValue.Kind != ValueKind.Array || arrayValue.Array == null)
+                    throw new InterpreterException("Indexing update is only supported on arrays.", update.Position);
+
+                Value indexVal = EvaluateExpression(ix.Index);
+                double index = ToNumberAt(indexVal, ix.Index.Position);
+
+                // Read old element (or Undefined -> ToNumberAt will throw, which is fine).
+                if (!arrayValue.Array.TryGetValue(index, out var elem))
+                    elem = Value.Undefined;
+
+                double oldNum = ToNumberAt(elem, update.Position);
+                double newNum = oldNum + update.Delta;
+
+                var dict = new Dictionary<double, Value>(arrayValue.Array);
+                dict[index] = Value.FromNumber(newNum);
+
+                Value newArrayValue = Value.FromArray(dict);
+
+                if (isLocal)
+                {
+                    _callStack.Peek().Locals[arrId.Name] = newArrayValue;
+                }
+                else
+                {
+                    _variables.Assign(arrId.Name, newArrayValue, _currentStatementIndex);
+                }
+
+                OnVariableMutated(arrId.Name);
+                return Value.FromNumber(oldNum);
+            }
+
+            throw new InterpreterException("Postfix ++/-- target must be an identifier or an array index.", update.Position);
+        }
+
+
         private void MarkDeleted(Value value, int position)
         {
             switch (value.Kind)

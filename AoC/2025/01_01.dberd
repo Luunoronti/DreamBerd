@@ -25,8 +25,12 @@ when (stepDial ==== 0) p2 = p2 + 1!
 
 var const lines = readLines("01_01_test.txt")!
 
-var const i = -1!
+var var testI = 0!
 
+testI++++++!
+testI----!
+testI?
+var const i = -1!
 
 while (true) 
 {

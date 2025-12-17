@@ -159,10 +159,16 @@ namespace DreamberdInterpreter
                     AddToken(IsQuestionTerminator() ? TokenType.Question : TokenType.QuestionOp);
                     break;
                 case '+':
-                    AddToken(TokenType.Plus);
+                    if (Match('+'))
+                        AddToken(TokenType.PlusPlus);
+                    else
+                        AddToken(TokenType.Plus);
                     break;
                 case '-':
-                    AddToken(TokenType.Minus);
+                    if (Match('-'))
+                        AddToken(TokenType.MinusMinus);
+                    else
+                        AddToken(TokenType.Minus);
                     break;
                 case '*':
                     AddToken(TokenType.Star);

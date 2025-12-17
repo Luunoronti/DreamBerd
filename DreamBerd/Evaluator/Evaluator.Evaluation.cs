@@ -1,4 +1,5 @@
 ﻿// Evaluator.Evaluation.cs
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace DreamberdInterpreter
@@ -45,6 +46,10 @@ namespace DreamberdInterpreter
 
                 case IndexExpression indexExpr:
                     result = EvaluateIndex(indexExpr);
+                    break;
+
+                case PostfixUpdateExpression post:
+                    result = EvaluatePostfixUpdate(post);
                     break;
 
                 case ConditionalExpression condExpr:

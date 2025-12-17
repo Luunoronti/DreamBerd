@@ -1,4 +1,4 @@
-// Ast.cs
+﻿// Ast.cs
 namespace DreamberdInterpreter
 {
     public enum UnaryOperator
@@ -389,6 +389,27 @@ namespace DreamberdInterpreter
             Index = index ?? throw new ArgumentNullException(nameof(index));
         }
     }
+
+    /// <summary>
+    /// Postfix update: x++ / x-- / x++++ / x----
+    ///
+    /// DreamBerd twist: every '++' token adds +1, so 'x++++' is +2, etc.
+    /// Returns the OLD numeric value (postfix semantics), then writes back the updated value.
+    /// Only allowed on assignable expressions: identifiers and indexing.
+    /// </summary>
+    public sealed class PostfixUpdateExpression : Expression
+    {
+        public Expression Target { get; }
+        public int Delta { get; } // +N for ++, -N for --
+
+        public PostfixUpdateExpression(Expression target, int delta, int position)
+            : base(position)
+        {
+            Target = target ?? throw new ArgumentNullException(nameof(target));
+            Delta = delta;
+        }
+    }
+
 
     public sealed class ConditionalExpression : Expression
     {

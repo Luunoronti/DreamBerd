@@ -37,7 +37,9 @@ namespace DreamberdInterpreter
         QuestionOp,        // conditional operator '?'
 
         Plus,
+        PlusPlus,
         Minus,
+        MinusMinus,
         Star,
         Slash,
 

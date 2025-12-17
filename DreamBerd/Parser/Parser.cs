@@ -1,4 +1,4 @@
-
+﻿
 namespace DreamberdInterpreter
 {
     public sealed partial class Parser
@@ -742,6 +742,34 @@ namespace DreamberdInterpreter
                     Consume(TokenType.RightBracket, "Expected ']' after index.");
                     expr = new IndexExpression(expr, index, expr.Position);
                 }
+                else if (Check(TokenType.PlusPlus) || Check(TokenType.MinusMinus))
+                {
+                    // Postfix update (x++ / x-- / x++++ / x---- ...)
+                    // NOTE: We treat repeated tokens as "hype level": every '++' adds +1, etc.
+                    // After a postfix update, no further postfix chaining is allowed (same as C-style rvalue result).
+
+                    int opPos = Peek().Position;
+
+                    // Only identifiers and indexing are assignable.
+                    if (expr is not IdentifierExpression && expr is not IndexExpression)
+                        throw new InterpreterException("Postfix ++/-- requires an assignable expression.", opPos);
+
+                    int delta = 0;
+                    if (Check(TokenType.PlusPlus))
+                    {
+                        while (Match(TokenType.PlusPlus))
+                            delta++;
+                    }
+                    else
+                    {
+                        while (Match(TokenType.MinusMinus))
+                            delta--;
+                    }
+
+                    expr = new PostfixUpdateExpression(expr, delta, opPos);
+                    break;
+                }
+
                 else
                 {
                     break;
