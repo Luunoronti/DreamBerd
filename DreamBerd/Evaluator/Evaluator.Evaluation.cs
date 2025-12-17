@@ -150,31 +150,52 @@ namespace DreamberdInterpreter
                         return Value.Null;
                     }
 
-                case IfStatement ifs:
+                
+case IfStatement ifs:
+    {
+        _ifDepth++;
+        try
+        {
+            while (true)
+            {
+                Value cond = EvaluateExpression(ifs.Condition);
+
+                try
+                {
+                    if (cond.IsTruthy())
                     {
-                        Value cond = EvaluateExpression(ifs.Condition);
-                        if (cond.IsTruthy())
+                        if (cond.Kind == ValueKind.Boolean && cond.Bool == BooleanState.Maybe)
                         {
-                            if (cond.Kind == ValueKind.Boolean)
-                            {
-                                if (cond.Bool == BooleanState.Maybe)
-                                {
-                                    if (ifs.IdkBranch != null)
-                                        return EvaluateStatement(ifs.IdkBranch);
-                                    else
-                                        return Value.Null;
-                                }
-                            }
-                            return EvaluateStatement(ifs.ThenBranch);
+                            if (ifs.IdkBranch != null)
+                                return EvaluateStatement(ifs.IdkBranch);
+
+                            // Jeśli nie ma idk-branch, a warunek jest maybe, to nic nie robimy.
+                            return Value.Null;
                         }
-                        else if (ifs.ElseBranch != null)
-                        {
-                            return EvaluateStatement(ifs.ElseBranch);
-                        }
-                        return Value.Null;
+
+                        return EvaluateStatement(ifs.ThenBranch);
+                    }
+                    else if (ifs.ElseBranch != null)
+                    {
+                        return EvaluateStatement(ifs.ElseBranch);
                     }
 
-                case WhileStatement ws:
+                    return Value.Null;
+                }
+                catch (TryAgainSignal)
+                {
+                    // wróć do warunku i spróbuj jeszcze raz
+                    continue;
+                }
+            }
+        }
+        finally
+        {
+            _ifDepth--;
+        }
+    }
+
+case WhileStatement ws:
                     {
                         _loopDepth++;
                         try
@@ -218,6 +239,14 @@ namespace DreamberdInterpreter
                             throw new InterpreterException("continue can only be used inside a while loop.", cs.Position);
                         throw new ContinueSignal();
                     }
+
+
+case TryAgainStatement tas:
+    {
+        if (_ifDepth <= 0)
+            throw new InterpreterException("try again can only be used inside an if/else/idk block.", tas.Position);
+        throw new TryAgainSignal();
+    }
 
                 case ReverseStatement _:
                 case ForwardStatement _:

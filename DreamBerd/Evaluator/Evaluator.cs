@@ -20,6 +20,10 @@ namespace DreamberdInterpreter
         // Używamy tego do walidacji break/continue (poza pętlą = błąd).
         private int _loopDepth;
 
+        // Głębokość zagnieżdżenia if/else/idk.
+        // Używamy tego do walidacji 'try again' (poza if-em = błąd).
+        private int _ifDepth;
+
         private const string WhenWildcard = "*";
 
         // when(sub.Condition) -> uruchamiaj Body tylko po mutacji zmiennych, które występują w Condition

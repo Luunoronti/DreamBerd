@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 
 namespace DreamberdInterpreter
 {
@@ -111,6 +109,23 @@ namespace DreamberdInterpreter
                 if (Check(TokenType.Bang))
                     Consume(TokenType.Bang, "Expected '!' after 'continue'.");
                 return new ContinueStatement(pos);
+            }
+
+
+            // try again!
+            // Statement-only: dozwolone tylko wewnątrz if/else/idk.
+            // Implementujemy to jako dwa identyfikatory: 'try' 'again' + terminator (! lub ?).
+            if (Check(TokenType.Identifier)
+                && string.Equals(Peek().Lexeme, "try", StringComparison.Ordinal)
+                && _current + 1 < _tokens.Count
+                && _tokens[_current + 1].Type == TokenType.Identifier
+                && string.Equals(_tokens[_current + 1].Lexeme, "again", StringComparison.Ordinal))
+            {
+                int pos = Peek().Position;
+                Advance(); // 'try'
+                Advance(); // 'again'
+                ParseTerminator(); // consume optional ! / ?? etc.
+                return new TryAgainStatement(pos);
             }
 
             if (Match(TokenType.Return))

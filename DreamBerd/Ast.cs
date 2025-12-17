@@ -1,7 +1,4 @@
 // Ast.cs
-using System;
-using System.Collections.Generic;
-
 namespace DreamberdInterpreter
 {
     public enum UnaryOperator
@@ -237,6 +234,21 @@ namespace DreamberdInterpreter
         {
         }
     }
+
+    /// <summary>
+    /// try again!
+    ///
+    /// Powoduje powrót do najbliższego otaczającego if/else/idk, ponowne obliczenie warunku
+    /// i ponowne wejście do odpowiedniej gałęzi.
+    /// </summary>
+    public sealed class TryAgainStatement : Statement
+    {
+        public TryAgainStatement(int position)
+            : base(position)
+        {
+        }
+    }
+
 
     /// <summary>
     /// Blok { ... }.
