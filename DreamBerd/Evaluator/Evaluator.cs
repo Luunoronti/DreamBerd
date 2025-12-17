@@ -332,8 +332,8 @@ namespace DreamberdInterpreter
             //   - x++ / x-- (incl. x++++ etc. via update.Delta)
             //   - arr[i]++ / arr[i]-- (only when arr is an identifier)
 
-            if (update.Delta == 0)
-                throw new InterpreterException("Invalid postfix update (delta = 0).", update.Position);
+            //if (update.Delta == 0)
+            //    throw new InterpreterException("Invalid postfix update (delta = 0).", update.Position);
 
             // Identifier target: x++ / x--
             if (update.Target is IdentifierExpression id)

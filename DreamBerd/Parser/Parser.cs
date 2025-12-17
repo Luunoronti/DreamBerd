@@ -721,63 +721,81 @@ namespace DreamberdInterpreter
         {
             Expression expr = ParsePrimary();
 
+            // 1) Najpierw klasyczne postfixy: call / index (i ewentualnie kolejne chainy)
             while (true)
             {
+                // Call: foo(...)
                 if (Match(TokenType.LeftParen))
                 {
                     var args = new List<Expression>();
+
                     if (!Check(TokenType.RightParen))
                     {
                         do
                         {
-                            args.Add(ParseExpression());
-                        } while (Match(TokenType.Comma));
+                            // ParseAssignment pozwala na np. array[x++] jako argument itd.
+                            args.Add(ParseAssignment());
+                        }
+                        while (Match(TokenType.Comma));
                     }
-                    Consume(TokenType.RightParen, "Expected ')' after arguments.");
-                    expr = new CallExpression(expr, args, expr.Position);
+
+                    Consume(TokenType.RightParen, "Expected ')' after call arguments.");
+                    expr = new CallExpression(expr, args, Previous().Position);
+                    continue;
                 }
-                else if (Match(TokenType.LeftBracket))
+
+                // Index: arr[expr]
+                if (Match(TokenType.LeftBracket))
                 {
-                    Expression index = ParseExpression();
-                    Consume(TokenType.RightBracket, "Expected ']' after index.");
-                    expr = new IndexExpression(expr, index, expr.Position);
+                    var indexExpr = ParseAssignment();
+                    Consume(TokenType.RightBracket, "Expected ']' after index expression.");
+                    expr = new IndexExpression(expr, indexExpr, Previous().Position);
+                    continue;
                 }
-                else if (Check(TokenType.PlusPlus) || Check(TokenType.MinusMinus))
+
+                break;
+            }
+
+            // 2) Potem postfix update chain: pozwalamy mieszać ++ i --
+            int delta = 0;
+            bool sawAny = false;
+            int opPos = -1;
+
+            while (true)
+            {
+                if (Match(TokenType.PlusPlus))
                 {
-                    // Postfix update (x++ / x-- / x++++ / x---- ...)
-                    // NOTE: We treat repeated tokens as "hype level": every '++' adds +1, etc.
-                    // After a postfix update, no further postfix chaining is allowed (same as C-style rvalue result).
+                    if (!sawAny) opPos = Previous().Position;
+                    delta++;
+                    sawAny = true;
+                    continue;
+                }
 
-                    int opPos = Peek().Position;
+                if (Match(TokenType.MinusMinus))
+                {
+                    if (!sawAny) opPos = Previous().Position;
+                    delta--;
+                    sawAny = true;
+                    continue;
+                }
 
-                    // Only identifiers and indexing are assignable.
-                    if (expr is not IdentifierExpression && expr is not IndexExpression)
-                        throw new InterpreterException("Postfix ++/-- requires an assignable expression.", opPos);
+                break;
+            }
 
-                    int delta = 0;
-                    if (Check(TokenType.PlusPlus))
-                    {
-                        while (Match(TokenType.PlusPlus))
-                            delta++;
-                    }
-                    else
-                    {
-                        while (Match(TokenType.MinusMinus))
-                            delta--;
-                    }
+            if (sawAny)
+            {
+                // Target musi być assignable: ident albo arr[index]
+                if (expr is not IdentifierExpression && expr is not IndexExpression)
+                    throw new InterpreterException("Postfix ++/-- requires an assignable target (variable or arr[index]).", opPos);
 
+                // delta==0 -> no-op, ale nadal legalne (np. x++--)
+                if (delta != 0)
                     expr = new PostfixUpdateExpression(expr, delta, opPos);
-                    break;
-                }
-
-                else
-                {
-                    break;
-                }
             }
 
             return expr;
         }
+
 
         private Expression ParsePrimary()
         {

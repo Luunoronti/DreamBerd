@@ -27,9 +27,9 @@ var const lines = readLines("01_01_test.txt")!
 
 var var testI = 0!
 
-testI++++++!
-testI----!
+testI++--++----!
 testI?
+
 var const i = -1!
 
 while (true) 
