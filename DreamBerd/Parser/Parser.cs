@@ -585,6 +585,12 @@ namespace DreamberdInterpreter
 
             while (true)
             {
+                // Allow "operator negation" before equality operators, e.g.:
+                //   a ;==== b   => ;(a ==== b)
+                int negPos = -1;
+                if (Match(TokenType.Semicolon))
+                    negPos = Previous().Position;
+
                 if (Match(TokenType.Equal))
                 {
                     int pos = Previous().Position;
@@ -605,8 +611,13 @@ namespace DreamberdInterpreter
                 }
                 else
                 {
+                    if (negPos >= 0)
+                        Fatal(Peek(), "Expected an equality operator after ';'.");
                     break;
                 }
+
+                if (negPos >= 0)
+                    expr = new UnaryExpression(UnaryOperator.Not, expr, negPos);
             }
 
             return expr;
@@ -618,6 +629,12 @@ namespace DreamberdInterpreter
 
             while (true)
             {
+                // Allow "operator negation" before comparison operators, e.g.:
+                //   a ;< b   => ;(a < b)
+                int negPos = -1;
+                if (Match(TokenType.Semicolon))
+                    negPos = Previous().Position;
+
                 if (Match(TokenType.Less))
                 {
                     int pos = Previous().Position;
@@ -642,14 +659,46 @@ namespace DreamberdInterpreter
                     Expression right = ParseTerm();
                     expr = new BinaryExpression(expr, BinaryOperator.GreaterOrEqual, right, pos);
                 }
+                else if (Match(TokenType.LessEqual))
+                {
+                    int pos = Previous().Position;
+                    Expression right = ParseTerm();
+                    expr = new BinaryExpression(expr, BinaryOperator.LessOrEqual, right, pos);
+                }
+                else if (Match(TokenType.Greater))
+                {
+                    int pos = Previous().Position;
+                    Expression right = ParseTerm();
+                    expr = new BinaryExpression(expr, BinaryOperator.Greater, right, pos);
+                }
+                else if (Match(TokenType.GreaterEqual))
+                {
+                    int pos = Previous().Position;
+                    Expression right = ParseTerm();
+                    expr = new BinaryExpression(expr, BinaryOperator.GreaterOrEqual, right, pos);
+                }
                 else
                 {
+                    if (negPos >= 0)
+                        Fatal(Peek(), "Expected a comparison operator after ';'.");
                     break;
                 }
+
+                if (negPos >= 0)
+                    expr = new UnaryExpression(UnaryOperator.Not, expr, negPos);
             }
 
             return expr;
         }
+
+        //        else
+        //        {
+        //            break;
+        //        }
+        //    }
+
+        //    return expr;
+        //}
 
         private Expression ParseTerm()
         {
