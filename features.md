@@ -12,99 +12,123 @@ Legenda:
 
 ---
 
-## ✅ Co już mamy w tym interpreterze
+## ✅ Co już mamy w tym interpreterze (zgodne z README lub bardzo blisko)
 
 ### Uruchamianie
-- ✅ Tryb **plik**: `DreamberdInterpreter.exe <ścieżka>` → wykonaj i wyjdź.
-- ✅ Tryb **REPL** bez argumentów: wklejanie wielu linii (zbieranie aż do pustej linii), potem parsowanie i wykonanie.
+- ✅ Tryb **plik**: `DreamberdInterpreter.exe <ścieżka>` → wykonaj plik.
+- ✅ Tryb **REPL**: bez argumentów → czyta wejście aż do pustej linii, odpala, powtarza.
 
-### Tokenizacja / parser
-- ✅ Tokeny z pozycją (offset w źródle) i AST z `Position` (do błędów).
-- ✅ Komentarze `// ...` do końca linii.
-- ✅ Podstawowe literały: liczby (double), stringi `'...'` i `"..."`.
-- ✅ Identyfikatory (litery/underscore/$ + cyfry dalej).
+### Lekser + parser
+- ✅ Tokenizacja podstawowej składni (identyfikatory, liczby, stringi, operatory, bloki).
+- ✅ Parser AST dla statementów i wyrażeń.
+- ✅ Błędy z `line:column` + podkreśleniem miejsca w linii.
 
-### Zakończenia instrukcji
-- ✅ Każdy statement kończy się `!` albo `?`.
-- ✅ `?` = tryb debug (drukowanie wartości / historii).
-- ❌ W naszej implementacji **nie ma** wielokrotnych `!!!` jako priorytetu (w specyfikacji to jest).
+### Zakończenia statementów
+- ✅ `!` jako terminator statementu.
+- ✅ `?` jako terminator debug (drukuje wartość wyrażenia, a dla identyfikatora także `history(...)`).
+- ✅ Dowolna liczba `!`/`?` (np. `!!!`) jest akceptowana.
+- ✅ Liczba `!` jest używana jako *priorytet deklaracji* (overloading).
 
-### Deklaracje
-- ✅ 4 warianty: `const const`, `const var`, `var const`, `var var`.
-- ✅ `const const const` jako osobny store (globalnie „nie do ruszenia”).
-- ✅ Lifetimes: składnia `<N>` i `<N s>` oraz `<Infinity>` (w runtime wygaszanie po statementach i/lub czasie).
+### Deklaracje (mutability)
+- ✅ `const const`, `const var`, `var const`, `var var`.
+- ✅ `const const const` jako globalny, immutable store (nie da się przypisać ani nadpisać).
+- 🟡 Semantyka „editable vs re-assignable” jest uproszczona (nie mamy obiektów/metod typu `push/pop`).
 
-### Bloki i scope’y
-- ✅ Bloki `{ ... }`.
-- ✅ Scope blokowy (push/pop scope w `VariableStore`) – zmienne blokowe nie „wyciekają” na zewnątrz.
-- ✅ Funkcje mają osobne scope’y (callframe/locals).
+### Typy i literały
+- ✅ Liczby (double).
+- ✅ Stringi w `"..."` oraz `'...'`.
+- ✅ Booleany 3-stanowe: `true`, `false`, `maybe`.
+- ✅ `undefined`.
+- 🟡 `null` istnieje jako wartość runtime (np. wynik statementów), ale nie ma osobnego literału `null` w parserze.
+
+### Wyrażenia i operatory
+- ✅ Arytmetyka: `+ - * /` (dzielenie przez 0 → `undefined`).
+- ✅ Porównania: `< > <= >=`.
+- ✅ Równość: `==` (very loose / stringowo), `===` (loose / numerycznie), `====` (strict).
+- ✅ Unarny minus: `-x`.
+- ✅ Przypisanie: `x = expr`.
+- ✅ Przypisanie indeksu: `arr[idx] = expr`.
+
+### Operator warunkowy (4 gałęzie)
+- ✅ `cond ? whenTrue`
+- ✅ Opcjonalne gałęzie (mogą wystąpić w dowolnej kolejności, i mogą być pominięte):
+  - `: whenFalse`
+  - `:: whenMaybe`
+  - `::: whenUndefined`
+- ✅ Brakująca gałąź → wynik `undefined`.
 
 ### Kontrola przepływu
-- ✅ `if (cond) stmt` oraz `if (cond) { ... } else { ... }`.
-- ✅ `reverse!` / `forward!` – zmiana kierunku iterowania po liście statementów.
-- ✅ (Rozszerzenie względem specyfikacji) `while`, `break`, `continue`.
-- ✅ `return` (jako statement; w funkcjach działa przez wewnętrzny mechanizm przerwania wykonania).
-
-### Wartości runtime
-- ✅ Typy: Number, String, Boolean (`true/false/maybe`), Null, Undefined, Array.
-- ✅ Truthiness:
-  - `false`, `null`, `undefined`, `0`, pusty string, pusta tablica → falsy
-  - `true` i `maybe` → truthy
-
-### Wyrażenia
-- ✅ Arytmetyka: `+ - * /` (z konkatenacją stringów dla `+`).
-- ✅ Dzielenie przez 0 → `undefined`.
-- ✅ Porównania: `< <= > >=` (na liczbach po konwersji).
-- ✅ Równości: `==`, `===`, `====` (nasza, „dreamberdowa” semantyka).
-- ✅ Przypisania: `x = expr`.
-- ✅ Tablice: `[a, b, c]`, indeksy od `-1` wzwyż, indeksowanie floatami.
-- ✅ Odczyt i zapis indeksu: `arr[idx]`, `arr[idx] = value` (immutable-by-value: podmiana całej tablicy).
-- ✅ Wywołania funkcji: `foo(a, b)`.
-- ✅ 4-gałęziowy operator warunkowy: `cond ? t : f :: m ::: u`.
+- ✅ `if (cond) ... else ... idk ...`
+  - `idk` odpala się, gdy `cond` jest `maybe`.
+- ✅ Bloki `{ ... }` tworzą scope (shadowing działa).
+- ✅ `return expr` w funkcjach.
 
 ### Funkcje
-- ✅ Deklaracje: dowolny prefix „function” (`function`, `func`, `fun`, `fn`, `functi`, `f`).
-- ✅ Ciało funkcji: expression **lub** blok `{ ... }`.
-- ✅ Rekursja działa.
+- ✅ Deklaracje: `function|func|fun|fn|functi|f name(args) => { ... }`
+- ✅ Call stack + lokalne zmienne funkcji.
+- ✅ Rekurencja działa.
 
-### Wbudowane rzeczy
-- ✅ `print(...)`.
-- ✅ Historia zmiennych:
-  - `previous(x)`, `next(x)` – przesuwanie kursora historii
-  - `history(x)` – zwraca tablicę historii
-  - `?` na identyfikatorze wypisuje historię
+### Tablice
+- ✅ Literały: `[a, b, c]`.
+- ✅ Indeksy startują od `-1`.
+- ✅ Indeksy mogą być float (`double`).
+- ✅ Odczyt brakującego indeksu → `undefined`.
+- ✅ `numArray(init, size)` tworzy tablicę numeryczną (indeksy od -1).
 
-### `delete`
-- ✅ `delete <primitive>!` usuwa: Number / String / Boolean (true/false/maybe).
-- ✅ Po `delete` próba uzyskania takiej wartości (wyniku evaluate) powoduje błąd.
-- ❌ Usuwanie słów kluczowych / konstrukcji języka (np. `delete class!`) – niezaimplementowane.
+### Lifetimes + overloading deklaracji
+- ✅ Lifetime: `<N>` (linie), `<N s>` (sekundy), `<Infinity>`.
+- ✅ Overloading: wiele deklaracji tej samej nazwy w scope:
+  - wybór aktywnej: najwyższy priorytet (liczba `!`), potem „najświeższa”
+  - wygasanie lifetimes może powodować fallback do starszej deklaracji
+- ✅ Historia zmiennych: `previous(x)`, `next(x)`, `history(x)`.
 
-### `when`
-- ✅ `when (cond) stmt!` (subskrypcja wykonywana po mutacjach zmiennych).
-- 🟡 Różnice vs README:
-  - w specyfikacji warunek bywa zapisany przez `=` (tam to „porównanie”), u nas `=` to przypisanie, a porównania to `==/===/====`.
-  - nasz model odpala sprawdzanie po każdej mutacji zmiennej (to blisko idei, ale szczegóły mogą się różnić).
+### when(...)
+- ✅ `when (condition) { ... }` subskrybuje mutacje zmiennych użytych w condition.
+- ✅ Gdy condition nie używa zmiennych (np. `when (true)`), odpala się po każdej mutacji (wildcard `*`).
+- ✅ Dispatch przez kolejkę (bez rekurencji przy mutacjach).
+
+### delete
+- ✅ `delete <primitive>` działa na number/string/boolean (zgodnie z README).
+  - po usunięciu: użycie tej wartości rzuca błąd.
+
+### Mini stdlib
+- ✅ `print(...)`
+- ✅ IO: `readFile(path)`, `readLines(path)`
+- ✅ Strings: `lines(text)`, `trim(text)`, `split(text, sep)`, `charAt(text, idx)`, `slice(text, start)`
+- ✅ Konwersje: `toNumber(x)` (+ aliasy `parseInt`, `parseNumber`)
 
 ---
 
-## 🟡 Mamy, ale inaczej / niepełne
+## ✅ Nasze rozszerzenia (poza oficjalnym README DreamBerd)
 
-- 🟡 **Identyfikatory „dowolny Unicode / string”**: README dopuszcza właściwie wszystko (włącznie z nazwą będącą liczbą). U nas identyfikator ma klasyczne reguły (litery/`_`/`$`, potem cyfry).
-- 🟡 **Overloading / priorytety**: README ma priorytety zależne od ilości `!` oraz `¡` (ujemne). U nas statement kończy się pojedynczym `!` albo `?`, a priorytet w deklaracji jest na razie stały.
-- 🟡 **Lifetimes „trwają między uruchomieniami”**: w README jest sugestia, że da się ustawić lifetime dłuższy niż pojedynczy run. U nas nie ma persistence między uruchomieniami.
+- ✅ `while (cond) { ... }` + `break` + `continue` (README mówi „no loops”).
+- ✅ Terminator statementu bywa opcjonalny (np. po `if/while` i po niektórych statementach).
+- ✅ Normalne znaczenie nawiasów `()` (w README nawiasy „nic nie robią”).
+- ✅ Klasyczne priorytety operatorów (w README priorytet wynika z whitespace).
 
 ---
 
-## ❌ Co jeszcze brakuje względem „specyfikacji” z README
+## 🟡 Mamy, ale inaczej / niepełne (względem README)
 
-Poniżej lista funkcji/sekcji, które występują w README DreamBerd, a których nie obsługujemy (albo w ogóle, albo znacząco odbiegamy).
+- 🟡 Mutability `const var` / `var var` nie wspiera „mutacji obiektów” (brak metod jak `push/pop`, brak obiektów).
+- 🟡 Naming: wspieramy Unicode *litery*, ale nie wspieramy emoji jako nazw, ani pełnego „number naming”.
+
+---
+
+## ❌ Co jeszcze brakuje (z oficjalnego README / specyfikacji)
 
 ### Składnia / whitespace / parser-quirks
-- ❌ **„Not” jako `;`** (semi-kolon) zamiast `!`.
-- ❌ **Znaczące whitespace dla arytmetyki** (kolejność działań zależna od spacji).
-- ❌ **Nawiasy nic nie robią** (w README są ignorowane i zastępowane whitespace).
-- ❌ **Indent = dokładnie 3 spacje** (walidacja w parserze).
-- ❌ **AI auto-wstawianie**: AEMI/ABI/AQMI (auto `!`, auto domykanie nawiasów i cudzysłowów).
+
+- ❌ Operator „not” jako `;` (np. `if (;false) { ... }`).
+- ❌ „Parentheses do nothing” (nawiasy ignorowane / zamieniane na whitespace).
+- ❌ „Significant whitespace” dla kolejności działań w arytmetyce.
+- ❌ Narzucone indenty: dokładnie 3 spacje (i -3 spacje).
+- ❌ Rozszerzone nazewnictwo: emoji, puste nazwy, nazwy będące keywordami, pełny „number naming”.
+- ❌ Pełny model „editable vs re-assignable” (mutacje struktur/obiektów jak `push/pop`).
+- ❌ Kasowanie keywordów/paradygmatów (`delete class`, `delete delete`, …).
+- ❌ AQMI / AI / Copilot gag-features z README.
+- ❌ Instalator / CLI zgodny z README (tu mamy tylko nasz .NET runner).
+
 
 ### Operatory / wyrażenia
 - ❌ Operator `=` jako „super-luźna równość” (README wspomina „jeśli chcesz być dużo mniej precyzyjny”).
@@ -153,21 +177,12 @@ Poniżej lista funkcji/sekcji, które występują w README DreamBerd, a których
 - ❌ „Number names” typu `one`, `two`.
 - ❌ Rozbudowane „naming” (np. deklaracje ze stringową nazwą, nazwy będące cyframi, itp.).
 
----
-
-## Notatki: nasze rozszerzenia (poza README)
-
-- ✅ `while / break / continue` – README twierdzi, że „nie ma pętli”. U nas pętle istnieją (praktyczne do testów i rozwoju).
-- ✅ `return` jako statement + funkcje z blokami `{ ... }`.
 
 ---
 
-## Sugestia kolejności dalszych prac (opcjonalnie)
+## Sugestia kolejności dalszych prac
 
-Jeżeli chcemy zbliżać się do README, a jednocześnie nie wysadzić parsera od razu:
-1) `!` wielokrotne + priorytet deklaracji (overloading)
-2) `=` jako „luźna równość” (osobny operator, nie Assign)
-3) `previous/next/current` jako keywordy (bez nawiasów)
-4) „Parentheses do nothing” (można zrobić jako pre-process/token-filter)
-5) dopiero potem: znaczące whitespace dla arytmetyki (to jest największy przewrót)
-
+1) Dopiąć zgodność ze spec: `;` jako not + tryb bez-normalnych-nawiasów (albo tryb kompatybilności).  
+2) Naming (szerszy Unicode + number naming).  
+3) Mutability „editable” (albo przynajmniej sensowna mutacja tablic dla `const var` / `var var`).  
+4) Indenty + significant whitespace.
