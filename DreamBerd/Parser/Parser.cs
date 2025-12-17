@@ -81,6 +81,14 @@ namespace DreamberdInterpreter
 
         private Token Previous() => _tokens[_current - 1];
 
+        private TokenType PeekType(int offset)
+        {
+            int idx = _current + offset;
+            if (idx < 0 || idx >= _tokens.Count)
+                return TokenType.EndOfFile;
+            return _tokens[idx].Type;
+        }
+
         private Token Advance()
         {
             if (!IsAtEnd()) _current++;
@@ -694,8 +702,12 @@ namespace DreamberdInterpreter
                 // Allow "operator negation" before equality operators, e.g.:
                 //   a ;==== b   => ;(a ==== b)
                 int negPos = -1;
-                if (Match(TokenType.Semicolon))
+                if (Check(TokenType.Semicolon) &&
+                    (PeekType(1) == TokenType.Equal || PeekType(1) == TokenType.EqualEqual || PeekType(1) == TokenType.EqualEqualEqual))
+                {
+                    Advance(); // consume ';'
                     negPos = Previous().Position;
+                }
 
                 if (Match(TokenType.Equal))
                 {
@@ -738,8 +750,15 @@ namespace DreamberdInterpreter
                 // Allow "operator negation" before comparison operators, e.g.:
                 //   a ;< b   => ;(a < b)
                 int negPos = -1;
-                if (Match(TokenType.Semicolon))
+                if (Check(TokenType.Semicolon) &&
+                    (PeekType(1) == TokenType.Less ||
+                     PeekType(1) == TokenType.LessEqual ||
+                     PeekType(1) == TokenType.Greater ||
+                     PeekType(1) == TokenType.GreaterEqual))
+                {
+                    Advance(); // consume ';'
                     negPos = Previous().Position;
+                }
 
                 if (Match(TokenType.Less))
                 {
