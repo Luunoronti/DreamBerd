@@ -112,6 +112,7 @@ Legenda:
 
 - 🟡 Mutability `const var` / `var var` nie wspiera „mutacji obiektów” (brak metod jak `push/pop`, brak obiektów).
 - 🟡 Naming: wspieramy Unicode *litery*, ale nie wspieramy emoji jako nazw, ani pełnego „number naming”.
+- 🟡 "Number names": slowa liczb po angielsku (`zero`..`nineteen`, `twenty`..`ninety`, skale do `quintillion`) i po polsku (`jeden`..`dziewietnascie`, `dwadziescia`.., skale do `trylionu`); parsujemy na literal tylko gdy slowa nie sa nazwami w scope i dopoki nie trafimy na nieznane slowo (wtedy literal zmienia sie w string calkowitego wejscia). `toNumber("...")` rozumie te same slowa. Brak ulamkow / `twenty-one` / polskich ulamkow / znaku minus.
 
 ---
 
@@ -174,7 +175,6 @@ Legenda:
 - ❌ `delete class!`, `delete delete!` itd. (kasowanie słów kluczowych / paradygmatów).
 
 ### Inne
-- ⚠️ „Number names” (angielskie slowa `zero`..`nineteen`, dziesiatki `twenty`..`ninety`, skale do `quintillion`; aliasy `milion`, `hundret`, `thounsand`/`thounsands`/plurale) parsujemy na literal **tylko jesli slowo nie jest nazwa w aktualnym scope**. Brak ulamkow / `twenty-one` / polskiej wersji.
 - ❌ Rozbudowane „naming” (np. deklaracje ze stringową nazwą, nazwy będące cyframi, itp.).
 
 

@@ -112,6 +112,7 @@ Legend:
 
 - 🟡 `const var` / `var var` “editable” semantics are not implemented (no objects, no methods like `push/pop`).
 - 🟡 Naming: we support Unicode *letters*, but not emoji identifiers, and not full “number naming”.
+- 🟡 "Number names": English words (`zero`..`nineteen`, `twenty`..`ninety`, scales up to `quintillion`) + Polish words (`jeden`..`dziewietnascie`, `dwadziescia`.., scales up to `trylion`); parsed to a number only if none of the words are names in scope and until an unknown word shows up (then the literal becomes the full input string). `toNumber("...")` understands the same words. No fractions / `twenty-one` / Polish fractional / negatives yet.
 
 ---
 
@@ -174,7 +175,6 @@ Legend:
 - ❌ `delete class!`, `delete delete!`, etc. (deleting keywords / paradigms).
 
 ### Other
-- ⚠️ “Number names”: English words `zero`..`nineteen`, tens `twenty`..`ninety`, scales up to `quintillion`; parsed as a numeric literal **only if the word is not a variable in scope**. No fractions / `twenty-one` / Polish version yet.
 - ❌ Extended “naming” (e.g. declarations with string names, names being digits, etc.).
 
 

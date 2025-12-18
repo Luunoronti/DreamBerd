@@ -1,7 +1,7 @@
-// DreamBerd - suite autotestów (PL)
-// Uruchom: DreamBerd.exe dreamberd_tests.dberd
+// DreamBerd - self-checking test suite (EN)
+// Run: DreamBerd.exe dreamberd_tests_en.dberd
 
-print("== DreamBerd test suite (PL) ==")!
+print("== DreamBerd test suite (EN) ==")!
 print("")!
 
 var var total = 0!
@@ -46,7 +46,7 @@ function assertFalse(name, cond) => {
 }!
 
 // --------------------------------------------
-print("== 1) Podstawy: arytmetyka / stringi / undefined ==")!
+print("== 1) Basics: arithmetic / strings / undefined ==")!
 // --------------------------------------------
 assertEq("1 + 2 = 3", 3, 1 + 2)!
 assertEq("2 * 3 = 6", 6, 2 * 3)!
@@ -57,7 +57,7 @@ assertEq("concat number->string", "a1", "a" + 1)!
 print("")!
 
 // --------------------------------------------
-print("== 2) 4-galeziowy operator warunkowy ==")!
+print("== 2) 4-branch conditional operator ==")!
 // --------------------------------------------
 assertEq("cond=true -> t", 1, true ? 1 : 2 :: 3 ::: 4)!
 assertEq("cond=false -> f", 2, false ? 1 : 2 :: 3 ::: 4)!
@@ -67,7 +67,7 @@ assertEq("cond=undefined -> u", 4, undefined ? 1 : 2 :: 3 ::: 4)!
 print("")!
 
 // --------------------------------------------
-print("== 3) if + truthiness + negacja ';' + ;== ==")!
+print("== 3) if + truthiness + ';' negation + ;== ==")!
 // --------------------------------------------
 function truthy(x) => {
     if (x) return true!
@@ -80,13 +80,13 @@ assertEq("if(false)", false, truthy(false))!
 assertEq("if(undefined)", false, truthy(undefined))!
 assertEq(";true -> false", false, ;true)!
 assertEq(";false -> true", true, ;false)!
-assertEq("1 ;== 2 (negacja porownania)", true, 1 ;== 2)!
-assertEq("2 ;== 2 (negacja porownania)", false, 2 ;== 2)!
+assertEq("1 ;== 2 (negated comparison)", true, 1 ;== 2)!
+assertEq("2 ;== 2 (negated comparison)", false, 2 ;== 2)!
 
 print("")!
 
 // --------------------------------------------
-print("== 4) Tablice (indeks od -1) + postfix ++ ==")!
+print("== 4) Arrays (start index -1) + postfix ++ ==")!
 // --------------------------------------------
 var var arr = [10, 20, 30]!
 assertEq("arr[-1] == 10", 10, arr[-1])!
@@ -99,13 +99,13 @@ assertEq("arr[-1] after assignment == 77", 77, arr[-1])!
 
 var var arr2 = [1, 2]!
 var var oldArr2 = arr2[-1]++!
-assertEq("postfix arr[i]++ zwraca stare", 1, oldArr2)!
-assertEq("postfix arr[i]++ zapisuje nowe", 2, arr2[-1])!
+assertEq("postfix arr[i]++ returns old", 1, oldArr2)!
+assertEq("postfix arr[i]++ writes new", 2, arr2[-1])!
 
 print("")!
 
 // --------------------------------------------
-print("== 5) Historia zmiennych: previous/next/history ==")!
+print("== 5) Variable history: previous/next/history ==")!
 // --------------------------------------------
 var var x = 1!
 x = 2!
@@ -135,7 +135,7 @@ assertEq("history(x)[1] == 3", 3, hx[1])!
 print("")!
 
 // --------------------------------------------
-print("== 6) Funkcje + return + rekurencja ==")!
+print("== 6) Functions + return + recursion ==")!
 // --------------------------------------------
 function fact(n) => {
     if (n ==== 0) return 1!
@@ -167,7 +167,7 @@ assertEq("continue! skips exactly one add (i==3)", 40, sum)!
 print("")!
 
 // --------------------------------------------
-print("== 8) Bloki + reverse ==")!
+print("== 8) Blocks + reverse ==")!
 // --------------------------------------------
 var var r = 0!
 {
@@ -176,12 +176,12 @@ var var r = 0!
     r = r + 10!
     r = r + 100!
 }
-assertEq("reverse w bloku wykonuje pierwsza linie drugi raz", 2, r)!
+assertEq("reverse inside block replays first stmt only", 2, r)!
 
 print("")!
 
 // --------------------------------------------
-print("== 9) Overloading / priorytet deklaracji (wielokrotne '!') ==")!
+print("== 9) Overloading / declaration priority (multiple '!') ==")!
 // --------------------------------------------
 const const ov1 = "Luke"!
 const const ov1 = "Lu"!
@@ -208,27 +208,27 @@ var var num_pl = dwa tysiace trzy!
 assertEq("dwa tysiace trzy -> 2003", 2003, num_pl)!
 
 var var num_bad = one milion spam!
-assertEq("nieznane slowo po liczbie => string", "one milion spam", num_bad)!
+assertEq("unknown word after number => string", "one milion spam", num_bad)!
 
 //assertEq("toNumber(\"123\")", 123, toNumber("123"))!
 assertEq("toNumber(english words)", 45, toNumber("forty five"))!
-assertEq("toNumber(polskie slowa)", 19, toNumber("dziewietnascie"))!
+assertEq("toNumber(polish words)", 19, toNumber("dziewietnascie"))!
 assertEq("toNumber(invalid)", undefined, toNumber("foo bar"))!
 
 print("")!
 
 // --------------------------------------------
-print("== 11) Postfix ++ / ** oraz potega '**' ==")!
+print("== 11) Postfix ++ / '**' ==")!
 // --------------------------------------------
 var var p = 2!
 var var oldp = p++!
-assertEq("postfix ++ zwraca stare", 2, oldp)!
-assertEq("postfix ++ zapisuje nowe", 3, p)!
+assertEq("postfix ++ returns old", 2, oldp)!
+assertEq("postfix ++ writes new", 3, p)!
 
 var var pow = 2!
 var var oldpow = pow****!
-assertEq("postfix '**' zwraca stare", 2, oldpow)!
-assertEq("postfix '**' zapisuje nowe (x^3)", 8, pow)!
+assertEq("postfix '**' returns old", 2, oldpow)!
+assertEq("postfix '**' writes new (x^3)", 8, pow)!
 
 print("")!
 
@@ -240,15 +240,15 @@ var var hits = 0!
 when (trigger > 1) { hits = hits + 1! }
 trigger = 2!
 trigger = 3!
-assertEq("when fires on kazdej mutacji spelniajacej condition", 2, hits)!
+assertEq("when fires on each matching mutation", 2, hits)!
 
 print("")!
 
 // --------------------------------------------
-print("== 13) toNumber + number literal z polskim 'i' jako ident ==")!
+print("== 13) toNumber + identifier 'i' not eaten by number literal ==")!
 // --------------------------------------------
 var var iVar = 5!
-assertEq("i jako ident nie blokuje i++", 6, (iVar++) + 1)!
+assertEq("i as identifier still supports i++", 6, (iVar++) + 1)!
 
 print("")!
 

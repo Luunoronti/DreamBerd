@@ -983,6 +983,14 @@ Expression ParsePower()
             //   x****     => x becomes x^3
             //   x******   => x becomes x^4
             // Returns OLD numeric value (postfix semantics), then writes back the powered value.
+            bool IsAssignable(Expression e)
+            {
+                return e is IdentifierExpression
+                    || e is IndexExpression
+                    || (e is PostfixUpdateExpression p &&
+                        (p.Target is IdentifierExpression || p.Target is IndexExpression));
+            }
+
             while (Match(TokenType.StarRun))
             {
                 var tok = Previous();
@@ -996,7 +1004,7 @@ Expression ParsePower()
 
                 int exponent = 1 + (starCount / 2);
 
-                if (expr is not IdentifierExpression && expr is not IndexExpression)
+                if (!IsAssignable(expr))
                     throw new InterpreterException("Postfix '**' power update requires an assignable target (variable or arr[index]).", tok.Position);
 
                 expr = new PowerStarsExpression(expr, exponent, tok.Position);
@@ -1031,7 +1039,7 @@ Expression ParsePower()
             if (sawAny)
             {
                 // Target musi być assignable: ident albo arr[index]
-                if (expr is not IdentifierExpression && expr is not IndexExpression)
+                if (!IsAssignable(expr))
                     throw new InterpreterException("Postfix ++/-- requires an assignable target (variable or arr[index]).", opPos);
 
                 // delta==0 -> no-op, ale nadal legalne (np. x++--)
@@ -1157,8 +1165,11 @@ Expression ParsePower()
                 if (IsNameShadowed(word))
                     return false;
 
-                if (string.Equals(word, "and", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(word, "and", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(word, "i", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (!sawAny)
+                        return false; // samo 'and'/'i' nie rozpoczyna liczby
                     i++;
                     consumedTokens++;
                     continue;

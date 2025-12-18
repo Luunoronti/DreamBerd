@@ -683,8 +683,13 @@ case TryAgainStatement tas:
                 {
                     string word = NormalizeNumberWord(rawWord);
 
-                    if (string.Equals(word, "and", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(word, "and", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(word, "i", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!sawAny)
+                            return false; // samo 'and'/'i' nie jest liczba
                         continue;
+                    }
 
                     if (NumberUnits.TryGetValue(word, out var unit))
                     {
