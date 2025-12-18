@@ -36,6 +36,7 @@ namespace DreamberdInterpreter
         Ampersand,
         Pipe,
         Caret,
+        DoublePipe,
 
         Bang,
         Question,          // statement debug terminator '?'
@@ -48,15 +49,26 @@ namespace DreamberdInterpreter
         Star,
         StarRun,
         Slash,
+        Tilde,
 
         Root,
 
         Less,
         LessEqual,
+        MinOp,            // '<>'
         ShiftLeft,
         Greater,
         GreaterEqual,
         ShiftRight,
+        MaxOp,            // '><'
+        MinUnicode,       // ⌊⌋
+        MaxUnicode,       // ⌈⌉
+        ClampSymbol,      // ▷
+        WrapSymbol,       // ↻
+        ClampKeyword,
+        WrapKeyword,
+        RangeDots,
+        At,
 
         Arrow,              // '=>'
         Assign,             // '='

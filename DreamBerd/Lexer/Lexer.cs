@@ -156,7 +156,10 @@ namespace DreamberdInterpreter
                     AddToken(TokenType.Ampersand);
                     break;
                 case '|':
-                    AddToken(TokenType.Pipe);
+                    if (Match('|'))
+                        AddToken(TokenType.DoublePipe);
+                    else
+                        AddToken(TokenType.Pipe);
                     break;
                 case '^':
                     AddToken(TokenType.Caret);
@@ -168,6 +171,12 @@ namespace DreamberdInterpreter
                     // Disambiguation: '?' at end-of-line / before '}' / before '//' is a debug terminator.
                     // Otherwise it is the conditional operator token.
                     AddToken(IsQuestionTerminator() ? TokenType.Question : TokenType.QuestionOp);
+                    break;
+                case '@':
+                    AddToken(TokenType.At);
+                    break;
+                case '~':
+                    AddToken(TokenType.Tilde);
                     break;
                 case '+':
                     if (Match('+'))
@@ -181,33 +190,35 @@ namespace DreamberdInterpreter
                     else
                         AddToken(TokenType.Minus);
                     break;
-                
-case '*':
-{
-    // '*' is normal multiply, but '**' and more is postfix power (StarRun)
-    int count = 1;
-    while (Match('*'))
-        count++;
+                case '*':
+                    {
+                        // '*' is normal multiply, but '**' and more is postfix power (StarRun)
+                        int count = 1;
+                        while (Match('*'))
+                            count++;
 
-    if (count == 1)
-        AddToken(TokenType.Star);
-    else
-        AddToken(TokenType.StarRun);
+                        if (count == 1)
+                            AddToken(TokenType.Star);
+                        else
+                            AddToken(TokenType.StarRun);
 
-    break;
-}case '/':
+                        break;
+                    }
+                case '/':
                     AddToken(TokenType.Slash);
                     break;
-                
-case '\\':
-    if (Match('\\'))
-        AddToken(TokenType.Root);
-    else
-        throw new InterpreterException("Expected \\\\ (double backslash) for root operator.", _start);
-    break;
 
-case '<':
-                    if (Match('='))
+                case '\\':
+                    if (Match('\\'))
+                        AddToken(TokenType.Root);
+                    else
+                        throw new InterpreterException("Expected \\\\ (double backslash) for root operator.", _start);
+                    break;
+
+                case '<':
+                    if (Match('>'))
+                        AddToken(TokenType.MinOp);
+                    else if (Match('='))
                         AddToken(TokenType.LessEqual);
                     else if (Match('<'))
                         AddToken(TokenType.ShiftLeft);
@@ -215,12 +226,20 @@ case '<':
                         AddToken(TokenType.Less);
                     break;
                 case '>':
-                    if (Match('='))
+                    if (Match('<'))
+                        AddToken(TokenType.MaxOp);
+                    else if (Match('='))
                         AddToken(TokenType.GreaterEqual);
                     else if (Match('>'))
                         AddToken(TokenType.ShiftRight);
                     else
                         AddToken(TokenType.Greater);
+                    break;
+                case '.':
+                    if (Match('.'))
+                        AddToken(TokenType.RangeDots);
+                    else
+                        throw new InterpreterException("Unexpected '.'.", _current - 1);
                     break;
                 case '=':
                     if (Match('>'))
@@ -253,6 +272,24 @@ case '<':
                 case '"':
                 case '\'':
                     ScanString(c);
+                    break;
+                case '▷':
+                    AddToken(TokenType.ClampSymbol);
+                    break;
+                case '↻':
+                    AddToken(TokenType.WrapSymbol);
+                    break;
+                case '⌊':
+                    if (Match('⌋'))
+                        AddToken(TokenType.MinUnicode);
+                    else
+                        throw new InterpreterException("Expected '⌋' after '⌊' for min operator.", _start);
+                    break;
+                case '⌈':
+                    if (Match('⌉'))
+                        AddToken(TokenType.MaxUnicode);
+                    else
+                        throw new InterpreterException("Expected '⌉' after '⌈' for max operator.", _start);
                     break;
                 default:
                     if (char.IsDigit(c))
@@ -328,6 +365,8 @@ case '<':
                 "while" => TokenType.While,
                 "break" => TokenType.Break,
                 "continue" => TokenType.Continue,
+                "clamp" => TokenType.ClampKeyword,
+                "wrap" => TokenType.WrapKeyword,
                 _ => TokenType.Identifier
             };
 
@@ -367,6 +406,7 @@ case '<':
         }
 
         private static bool IsOperatorChar(char c) =>
-            c is '+' or '-' or '*' or '/' or '\\' or '%' or '&' or '|' or '^' or '!' or '?' or ':' or '<' or '>' or '=' or '[' or ']' or '{' or '}' or ',' or ';' or '.';
+            c is '+' or '-' or '*' or '/' or '\\' or '%' or '&' or '|' or '^' or '!' or '?' or ':' or '<' or '>' or '=' or '[' or ']' or '{' or '}' or ',' or ';' or '.' or '@' or '~'
+                or '▷' or '↻' or '⌊' or '⌋' or '⌈' or '⌉';
     }
 }

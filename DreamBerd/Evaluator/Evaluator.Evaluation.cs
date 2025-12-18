@@ -128,6 +128,10 @@ namespace DreamberdInterpreter
                     result = EvaluateRootInfix(rootInfix);
                     break;
 
+                case RangeExpression rangeExpr:
+                    result = EvaluateRangeLiteral(rangeExpr);
+                    break;
+
                 case ConditionalExpression condExpr:
                     result = EvaluateConditional(condExpr);
                     break;
@@ -406,6 +410,18 @@ case TryAgainStatement tas:
                 case UnaryOperator.Negate:
                     return Value.FromNumber(-ToNumberAt(operand, unary.Operand.Position));
 
+                case UnaryOperator.Abs:
+                    return Value.FromNumber(Math.Abs(ToNumberAt(operand, unary.Operand.Position)));
+
+                case UnaryOperator.Sin:
+                    return Value.FromNumber(Math.Sin(ToNumberAt(operand, unary.Operand.Position)));
+
+                case UnaryOperator.Cos:
+                    return Value.FromNumber(Math.Cos(ToNumberAt(operand, unary.Operand.Position)));
+
+                case UnaryOperator.Tan:
+                    return Value.FromNumber(Math.Tan(ToNumberAt(operand, unary.Operand.Position)));
+
                 case UnaryOperator.Not:
                     // DreamBerd boolean negation operator ';'
                     // true -> false, false -> true, maybe -> maybe, undefined -> undefined
@@ -432,6 +448,24 @@ case TryAgainStatement tas:
 
         private Value EvaluateBinary(BinaryExpression binary)
         {
+            if (binary.Operator == BinaryOperator.Clamp)
+            {
+                Value leftVal = EvaluateExpression(binary.Left);
+                var rangeExpr = binary.Right as RangeExpression
+                    ?? throw new InterpreterException("Clamp operator expects a range on the right-hand side.", binary.Right.Position);
+                var bounds = EvaluateRange(rangeExpr);
+                return ClampValue(leftVal, bounds, binary.Position);
+            }
+
+            if (binary.Operator == BinaryOperator.Wrap)
+            {
+                Value leftVal = EvaluateExpression(binary.Left);
+                var rangeExpr = binary.Right as RangeExpression
+                    ?? throw new InterpreterException("Wrap operator expects a range on the right-hand side.", binary.Right.Position);
+                var bounds = EvaluateRange(rangeExpr);
+                return WrapValue(leftVal, bounds, binary.Position);
+            }
+
             Value left = EvaluateExpression(binary.Left);
             Value right = EvaluateExpression(binary.Right);
 
@@ -469,6 +503,12 @@ case TryAgainStatement tas:
 
                 case BinaryOperator.GreaterOrEqual:
                     return Value.FromBoolean(ToNumberAt(left, binary.Left.Position) >= ToNumberAt(right, binary.Right.Position));
+
+                case BinaryOperator.Min:
+                    return Value.FromNumber(Math.Min(ToNumberAt(left, binary.Left.Position), ToNumberAt(right, binary.Right.Position)));
+
+                case BinaryOperator.Max:
+                    return Value.FromNumber(Math.Max(ToNumberAt(left, binary.Left.Position), ToNumberAt(right, binary.Right.Position)));
 
                 default:
                     throw new InterpreterException($"Unsupported binary operator {binary.Operator}.", binary.Position);
@@ -715,6 +755,42 @@ case TryAgainStatement tas:
                         newValue = Value.FromNumber(Math.Max(leftNum, rightNum));
                         break;
                     }
+                case UpdateOperator.Sin:
+                    {
+                        double baseVal = ToNumberAt(current, us.Target.Position);
+                        newValue = Value.FromNumber(Math.Sin(baseVal));
+                        break;
+                    }
+                case UpdateOperator.Cos:
+                    {
+                        double baseVal = ToNumberAt(current, us.Target.Position);
+                        newValue = Value.FromNumber(Math.Cos(baseVal));
+                        break;
+                    }
+                case UpdateOperator.Tan:
+                    {
+                        double baseVal = ToNumberAt(current, us.Target.Position);
+                        newValue = Value.FromNumber(Math.Tan(baseVal));
+                        break;
+                    }
+                case UpdateOperator.Clamp:
+                    {
+                        var rangeExpr = us.RangeExpression ?? throw new InterpreterException("Missing range for clamp update.", us.Position);
+                        var bounds = EvaluateRange(rangeExpr);
+                        newValue = ClampValue(current, bounds, us.Target.Position);
+                        break;
+                    }
+                case UpdateOperator.Wrap:
+                    {
+                        var rangeExpr = us.RangeExpression ?? throw new InterpreterException("Missing range for wrap update.", us.Position);
+                        var bounds = EvaluateRange(rangeExpr);
+                        double delta = us.ValueExpression != null
+                            ? ToNumberAt(EvaluateExpression(us.ValueExpression), us.ValueExpression.Position)
+                            : 0.0;
+                        Value baseValue = Value.FromNumber(ToNumberAt(current, us.Target.Position) + delta);
+                        newValue = WrapValue(baseValue, bounds, us.Target.Position);
+                        break;
+                    }
                 default:
                     throw new InterpreterException($"Unsupported update operator {us.Operator}.", us.Position);
             }
@@ -729,6 +805,108 @@ case TryAgainStatement tas:
                 OnVariableMutated(mutatedName);
 
             return newValue;
+        }
+
+        private readonly struct RangeBounds
+        {
+            public RangeBounds(double lower, double upper, bool includeLower, bool includeUpper)
+            {
+                Lower = lower;
+                Upper = upper;
+                IncludeLower = includeLower;
+                IncludeUpper = includeUpper;
+            }
+
+            public double Lower { get; }
+            public double Upper { get; }
+            public bool IncludeLower { get; }
+            public bool IncludeUpper { get; }
+        }
+
+        private Value EvaluateRangeLiteral(RangeExpression rangeExpr)
+        {
+            _ = EvaluateRange(rangeExpr);
+            return Value.Undefined;
+        }
+
+        private RangeBounds EvaluateRange(RangeExpression rangeExpr)
+        {
+            double lower = ToNumberAt(EvaluateExpression(rangeExpr.Lower), rangeExpr.Lower.Position);
+            double upper = ToNumberAt(EvaluateExpression(rangeExpr.Upper), rangeExpr.Upper.Position);
+            return new RangeBounds(lower, upper, rangeExpr.IncludeLower, rangeExpr.IncludeUpper);
+        }
+
+        private Value ClampValue(Value input, RangeBounds bounds, int position)
+        {
+            if (double.IsNaN(bounds.Lower) || double.IsNaN(bounds.Upper))
+                return Value.Undefined;
+
+            if (bounds.Upper < bounds.Lower)
+                return Value.Undefined;
+
+            double val = ToNumberAt(input, position);
+            double result = val;
+
+            if (val < bounds.Lower || (!bounds.IncludeLower && NearlyEqual(val, bounds.Lower)))
+            {
+                result = bounds.IncludeLower ? bounds.Lower : NextAfter(bounds.Lower, bounds.Upper);
+            }
+            else if (val > bounds.Upper || (!bounds.IncludeUpper && NearlyEqual(val, bounds.Upper)))
+            {
+                result = bounds.IncludeUpper ? bounds.Upper : NextAfter(bounds.Upper, bounds.Lower);
+            }
+
+            if (!bounds.IncludeLower && result <= bounds.Lower)
+                result = NextAfter(bounds.Lower, bounds.Upper);
+            if (!bounds.IncludeUpper && result >= bounds.Upper)
+                result = NextAfter(bounds.Upper, bounds.Lower);
+
+            return Value.FromNumber(result);
+        }
+
+        private Value WrapValue(Value input, RangeBounds bounds, int position)
+        {
+            if (double.IsNaN(bounds.Lower) || double.IsNaN(bounds.Upper))
+                return Value.Undefined;
+
+            double width = bounds.Upper - bounds.Lower;
+            if (width <= 0)
+                return Value.Undefined;
+
+            double val = ToNumberAt(input, position);
+
+            double wrapped = val - bounds.Lower;
+            wrapped %= width;
+            if (wrapped < 0)
+                wrapped += width;
+            wrapped += bounds.Lower;
+
+            if (bounds.IncludeUpper && NearlyEqual(val, bounds.Upper))
+                wrapped = bounds.Upper;
+
+            if (!bounds.IncludeLower && NearlyEqual(wrapped, bounds.Lower))
+                wrapped = NextAfter(bounds.Lower, bounds.Upper);
+            if (!bounds.IncludeUpper && NearlyEqual(wrapped, bounds.Upper))
+                wrapped = NextAfter(bounds.Upper, bounds.Lower);
+
+            return Value.FromNumber(wrapped);
+        }
+
+        private static bool NearlyEqual(double a, double b, double epsilon = 1e-9)
+        {
+            return Math.Abs(a - b) <= epsilon * Math.Max(1.0, Math.Max(Math.Abs(a), Math.Abs(b)));
+        }
+
+        private static double NextAfter(double start, double towards)
+        {
+            if (double.IsNaN(start) || double.IsNaN(towards))
+                return double.NaN;
+
+            if (towards > start)
+                return Math.BitIncrement(start);
+            if (towards < start)
+                return Math.BitDecrement(start);
+            return start;
         }
 
         private Value ResolveAssignable(Expression target, int position, out Action<Value> assign, out string? mutatedName)

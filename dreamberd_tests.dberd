@@ -321,6 +321,39 @@ var var f = 16!
 f :>> 2!
 assertEq("f :>> 2! (16>>2) => 4", 4, f)!
 
+// Nowe operatory: abs, trygonometria, min/max aliasy, clamp/wrap
+assertEq("||-5 (abs) => 5", 5, ||-5)!
+assertEq("~0 (sin 0) => 0", 0, ~0)!
+assertEq("~~0 (cos 0) => 1", 1, ~~0)!
+assertEq("~~~0 (tan 0) => 0", 0, ~~~0)!
+
+var var trigUpd = 0!
+trigUpd :~~~!
+assertEq("trigUpd :~~~! (tan 0) => 0", 0, trigUpd)!
+
+assertEq("3 <> 10 => 3", 3, 3 <> 10)!
+assertEq("3 >< 10 => 10", 10, 3 >< 10)!
+assertEq("3 ⌊⌋ 10 => 3", 3, 3 ⌊⌋ 10)!
+assertEq("3 ⌈⌉ 10 => 10", 10, 3 ⌈⌉ 10)!
+
+var var mm2 = 9!
+mm2 :<> 4!
+assertEq("mm2 :<> 4! => 4", 4, mm2)!
+mm2 :>< 20!
+assertEq("mm2 :>< 20! => 20", 20, mm2)!
+
+assertEq("-1 ▷ [0 .. 10] => 0", 0, -1 ▷ [0 .. 10])!
+assertEq("15 clamp [0 .. 10] => 10", 10, 15 clamp [0 .. 10])!
+assertEq("-7 ↻ [0 .. 100] => 93", 93, -7 ↻ [0 .. 100])!
+assertEq("95 wrap [0 .. 100] => 95", 95, 95 wrap [0 .. 100])!
+
+var var wrapUpd = 0!
+wrapUpd :↻ -7 @ [0 .. 100]!
+assertEq("wrapUpd :↻ -7 @ [0 .. 100]! => 93", 93, wrapUpd)!
+var var clampUpd = -5!
+clampUpd :▷ [0 .. 10]!
+assertEq("clampUpd :▷ [0 .. 10]! => 0", 0, clampUpd)!
+
 print("")!
 
 // --------------------------------------------

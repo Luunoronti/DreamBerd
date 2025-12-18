@@ -4,7 +4,11 @@ namespace DreamberdInterpreter
     public enum UnaryOperator
     {
         Negate,
-        Not
+        Not,
+        Abs,
+        Sin,
+        Cos,
+        Tan
     }
 
     public enum BinaryOperator
@@ -19,7 +23,11 @@ namespace DreamberdInterpreter
         Less,
         Greater,
         LessOrEqual,
-        GreaterOrEqual
+        GreaterOrEqual,
+        Min,
+        Max,
+        Clamp,
+        Wrap
     }
 
     public enum Mutability
@@ -52,7 +60,12 @@ namespace DreamberdInterpreter
         ShiftRight,
         NullishAssign,
         Min,
-        Max
+        Max,
+        Sin,
+        Cos,
+        Tan,
+        Clamp,
+        Wrap
     }
 
     /// <summary>
@@ -286,6 +299,11 @@ namespace DreamberdInterpreter
             get;
         }
 
+        public RangeExpression? RangeExpression
+        {
+            get;
+        }
+
         public int RunValue
         {
             get;
@@ -296,12 +314,20 @@ namespace DreamberdInterpreter
             get;
         }
 
-        public UpdateStatement(Expression target, UpdateOperator op, Expression? valueExpression, int runValue, bool isDebug, int position)
+        public UpdateStatement(
+            Expression target,
+            UpdateOperator op,
+            Expression? valueExpression,
+            RangeExpression? rangeExpression,
+            int runValue,
+            bool isDebug,
+            int position)
             : base(position)
         {
             Target = target ?? throw new ArgumentNullException(nameof(target));
             Operator = op;
             ValueExpression = valueExpression;
+            RangeExpression = rangeExpression;
             RunValue = runValue;
             IsDebug = isDebug;
         }
@@ -532,7 +558,24 @@ namespace DreamberdInterpreter
         }
     }
 
-public sealed class ConditionalExpression : Expression
+    public sealed class RangeExpression : Expression
+    {
+        public Expression Lower { get; }
+        public Expression Upper { get; }
+        public bool IncludeLower { get; }
+        public bool IncludeUpper { get; }
+
+        public RangeExpression(Expression lower, Expression upper, bool includeLower, bool includeUpper, int position)
+            : base(position)
+        {
+            Lower = lower ?? throw new ArgumentNullException(nameof(lower));
+            Upper = upper ?? throw new ArgumentNullException(nameof(upper));
+            IncludeLower = includeLower;
+            IncludeUpper = includeUpper;
+        }
+    }
+
+    public sealed class ConditionalExpression : Expression
     {
         public Expression Condition { get; }
         public Expression WhenTrue { get; }

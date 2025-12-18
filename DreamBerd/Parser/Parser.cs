@@ -119,6 +119,7 @@ namespace DreamberdInterpreter
         private const int PrecAdd = 30;
         private const int PrecMultiply = 40;
         private const int PrecRoot = 50;
+        private const int PrecClamp = 45;
 
         private delegate Expression BinaryBuilder(Expression left, Expression right, int position);
 
@@ -167,11 +168,19 @@ namespace DreamberdInterpreter
             { TokenType.Minus, new BinaryOperatorDescriptor(PrecAdd, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Subtract, r, pos)) },
             { TokenType.Star, new BinaryOperatorDescriptor(PrecMultiply, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Multiply, r, pos)) },
             { TokenType.Slash, new BinaryOperatorDescriptor(PrecMultiply, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Divide, r, pos)) },
+            { TokenType.ClampSymbol, new BinaryOperatorDescriptor(PrecClamp, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Clamp, r, pos)) },
+            { TokenType.ClampKeyword, new BinaryOperatorDescriptor(PrecClamp, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Clamp, r, pos)) },
+            { TokenType.WrapSymbol, new BinaryOperatorDescriptor(PrecClamp, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Wrap, r, pos)) },
+            { TokenType.WrapKeyword, new BinaryOperatorDescriptor(PrecClamp, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Wrap, r, pos)) },
             { TokenType.Root, new BinaryOperatorDescriptor(PrecRoot, (l, r, pos) => new RootInfixExpression(l, r, pos)) },
             { TokenType.Less, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Less, r, pos)) },
             { TokenType.LessEqual, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.LessOrEqual, r, pos)) },
             { TokenType.Greater, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Greater, r, pos)) },
             { TokenType.GreaterEqual, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.GreaterOrEqual, r, pos)) },
+            { TokenType.MinOp, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Min, r, pos)) },
+            { TokenType.MinUnicode, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Min, r, pos)) },
+            { TokenType.MaxOp, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Max, r, pos)) },
+            { TokenType.MaxUnicode, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Max, r, pos)) },
             { TokenType.Equal, new BinaryOperatorDescriptor(PrecEquality, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Equal, r, pos)) },
             { TokenType.EqualEqual, new BinaryOperatorDescriptor(PrecEquality, (l, r, pos) => new BinaryExpression(l, BinaryOperator.DoubleEqual, r, pos)) },
             { TokenType.EqualEqualEqual, new BinaryOperatorDescriptor(PrecEquality, (l, r, pos) => new BinaryExpression(l, BinaryOperator.TripleEqual, r, pos)) },
@@ -685,6 +694,7 @@ namespace DreamberdInterpreter
 
             UpdateOperator? op = null;
             Expression? rhs = null;
+            RangeExpression? rangeExpr = null;
             int runValue = 0;
 
             if (Match(TokenType.Plus))
@@ -777,6 +787,16 @@ namespace DreamberdInterpreter
                 op = UpdateOperator.NullishAssign;
                 rhs = ParseExpression();
             }
+            else if (Match(TokenType.MinOp) || Match(TokenType.MinUnicode))
+            {
+                op = UpdateOperator.Min;
+                rhs = ParseExpression();
+            }
+            else if (Match(TokenType.MaxOp) || Match(TokenType.MaxUnicode))
+            {
+                op = UpdateOperator.Max;
+                rhs = ParseExpression();
+            }
             else if (Match(TokenType.Less))
             {
                 op = UpdateOperator.Min;
@@ -787,6 +807,45 @@ namespace DreamberdInterpreter
                 op = UpdateOperator.Max;
                 rhs = ParseExpression();
             }
+            else if (Check(TokenType.Tilde))
+            {
+                int tildeCount = 0;
+                int tildePos = -1;
+                while (Match(TokenType.Tilde))
+                {
+                    if (tildePos < 0) tildePos = Previous().Position;
+                    tildeCount++;
+                }
+
+                op = tildeCount switch
+                {
+                    1 => UpdateOperator.Sin,
+                    2 => UpdateOperator.Cos,
+                    3 => UpdateOperator.Tan,
+                    _ => throw new InterpreterException("Too many '~' operators in update.", tildePos)
+                };
+            }
+            else if (Match(TokenType.ClampSymbol) || Match(TokenType.ClampKeyword))
+            {
+                op = UpdateOperator.Clamp;
+                rangeExpr = ParseUpdateRange();
+            }
+            else if (Match(TokenType.WrapSymbol) || Match(TokenType.WrapKeyword))
+            {
+                op = UpdateOperator.Wrap;
+
+                if (!Check(TokenType.At) && !IsRangeStart(Peek().Type))
+                {
+                    rhs = ParseExpression();
+                }
+
+                if (Match(TokenType.At))
+                {
+                    // opcjonalny separator miedzy delta a zakresem
+                }
+
+                rangeExpr = ParseUpdateRange();
+            }
             else
             {
                 _current = start;
@@ -794,8 +853,21 @@ namespace DreamberdInterpreter
             }
 
             bool isDebug = ParseTerminatorIsDebug();
-            stmt = new UpdateStatement(target, op.Value, rhs, runValue, isDebug, target.Position);
+            stmt = new UpdateStatement(target, op.Value, rhs, rangeExpr, runValue, isDebug, target.Position);
             return true;
+
+            RangeExpression ParseUpdateRange()
+            {
+                if (Match(TokenType.LeftBracket))
+                    return ParseRangeLiteral(true, Previous().Position);
+                if (Match(TokenType.RightBracket))
+                    return ParseRangeLiteral(false, Previous().Position);
+
+                throw new InterpreterException("Expected range literal after update operator.", Peek().Position);
+            }
+
+            static bool IsRangeStart(TokenType type) =>
+                type == TokenType.LeftBracket || type == TokenType.RightBracket;
         }
 
         private Expression? TryParseUpdateTarget()
@@ -1349,6 +1421,35 @@ Expression ParsePower()
                 return new PrefixRootExpression(operand, degree, rootPos);
             }
 
+            if (Match(TokenType.DoublePipe))
+            {
+                int pos = Previous().Position;
+                Expression operand = ParseUnary();
+                return new UnaryExpression(UnaryOperator.Abs, operand, pos);
+            }
+
+            int tildeCount = 0;
+            int tildePos = -1;
+            while (Match(TokenType.Tilde))
+            {
+                if (tildePos < 0) tildePos = Previous().Position;
+                tildeCount++;
+            }
+
+            if (tildeCount > 0)
+            {
+                UnaryOperator op = tildeCount switch
+                {
+                    1 => UnaryOperator.Sin,
+                    2 => UnaryOperator.Cos,
+                    3 => UnaryOperator.Tan,
+                    _ => throw new InterpreterException("Too many '~' operators in a row. Use up to three.", tildePos)
+                };
+
+                Expression operand = ParseUnary();
+                return new UnaryExpression(op, operand, tildePos);
+            }
+
 
             if (Match(TokenType.Semicolon))
             {
@@ -1408,7 +1509,9 @@ Expression ParsePower()
                     BinaryOperatorTable.ContainsKey(_tokens[_current + 1].Type))
                     return false;
 
-                if (!IsArgumentStart(nextType))
+                bool startsRangeArgument = nextType == TokenType.RightBracket && LooksLikeRangeLiteral(_current + 1);
+
+                if (!IsArgumentStart(nextType) && !startsRangeArgument)
                     return false;
 
                 // '[' bez odstępu po callee to index, nie argument
@@ -1594,10 +1697,19 @@ Expression ParsePower()
                 return expr;
             }
 
-            if (Match(TokenType.LeftBracket))
+            if (Match(TokenType.LeftBracket) || Match(TokenType.RightBracket))
             {
-                int pos = Previous().Position;
+                Token open = Previous();
+                bool includeLower = open.Type == TokenType.LeftBracket;
+                bool looksRange = LooksLikeRangeLiteral(_current);
 
+                if (!includeLower && !looksRange)
+                    throw new InterpreterException("Unexpected ']'.", open.Position);
+
+                if (looksRange || !includeLower)
+                    return ParseRangeLiteral(includeLower, open.Position);
+
+                int pos = open.Position;
                 var elements = new List<Expression>();
                 if (!Check(TokenType.RightBracket))
                 {
@@ -1611,6 +1723,57 @@ Expression ParsePower()
             }
 
             throw new InterpreterException($"Unexpected token '{Peek().Lexeme}'.", Peek().Position);
+        }
+
+        private bool LooksLikeRangeLiteral(int startIndex)
+        {
+            int depth = 1;
+            for (int i = startIndex; i < _tokens.Count; i++)
+            {
+                var type = _tokens[i].Type;
+
+                if (type == TokenType.RangeDots && depth == 1)
+                    return true;
+
+                if (type == TokenType.LeftBracket)
+                    depth++;
+                else if (type == TokenType.RightBracket)
+                {
+                    depth--;
+                    if (depth == 0)
+                        break;
+                }
+                else if (type == TokenType.Comma && depth == 1)
+                {
+                    // wyglada jak array, bo mamy wiecej niz jeden element rozdzielony przecinkiem
+                    return false;
+                }
+            }
+
+            return false;
+        }
+
+        private RangeExpression ParseRangeLiteral(bool includeLower, int startPosition)
+        {
+            Expression lower = ParseExpression();
+            Consume(TokenType.RangeDots, "Expected '..' in range literal.");
+            Expression upper = ParseExpression();
+
+            bool includeUpper;
+            if (Match(TokenType.RightBracket))
+            {
+                includeUpper = true;
+            }
+            else if (Match(TokenType.LeftBracket))
+            {
+                includeUpper = false;
+            }
+            else
+            {
+                throw new InterpreterException("Expected ']' or '[' to close range literal.", Peek().Position);
+            }
+
+            return new RangeExpression(lower, upper, includeLower, includeUpper, startPosition);
         }
 
         private bool TryParseNumberNameLiteral(out ulong value, out int consumedTokens, out int literalPosition, out bool fallbackToString, out int fallbackStartIndex)
