@@ -4,6 +4,7 @@ namespace DreamberdInterpreter
     public sealed partial class Parser
     {
         private readonly IReadOnlyList<Token> _tokens;
+        private readonly string _source;
         private int _current;
 
         private readonly Stack<HashSet<string>> _scopeStack = new Stack<HashSet<string>>();
@@ -69,9 +70,75 @@ namespace DreamberdInterpreter
             ["thousandths"] = "thousand", // pelny plural - tez sprowadzamy
         };
 
-        public Parser(IReadOnlyList<Token> tokens)
+        // Precedens bazowy poszczegolnych operatorow; realny precedens wyznacza liczba spacji.
+        private const int WhitespacePrecedenceWeight = 1000;
+        private const int PrecEquality = 10;
+        private const int PrecComparison = 20;
+        private const int PrecAdd = 30;
+        private const int PrecMultiply = 40;
+        private const int PrecRoot = 50;
+
+        private delegate Expression BinaryBuilder(Expression left, Expression right, int position);
+
+        private sealed record BinaryOperatorDescriptor(int BasePrecedence, BinaryBuilder Builder);
+
+        private readonly struct BinaryOperatorMatch
+        {
+            public BinaryOperatorDescriptor Descriptor
+            {
+                get;
+            }
+
+            public Token OperatorToken
+            {
+                get;
+            }
+
+            public int TokensToConsume
+            {
+                get;
+            }
+
+            public int Precedence
+            {
+                get;
+            }
+
+            public bool Negate
+            {
+                get;
+            }
+
+            public BinaryOperatorMatch(BinaryOperatorDescriptor descriptor, Token operatorToken, int tokensToConsume, int precedence, bool negate)
+            {
+                Descriptor = descriptor;
+                OperatorToken = operatorToken;
+                TokensToConsume = tokensToConsume;
+                Precedence = precedence;
+                Negate = negate;
+            }
+        }
+
+        private static readonly Dictionary<TokenType, BinaryOperatorDescriptor> BinaryOperatorTable = new()
+        {
+            { TokenType.Plus, new BinaryOperatorDescriptor(PrecAdd, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Add, r, pos)) },
+            { TokenType.Minus, new BinaryOperatorDescriptor(PrecAdd, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Subtract, r, pos)) },
+            { TokenType.Star, new BinaryOperatorDescriptor(PrecMultiply, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Multiply, r, pos)) },
+            { TokenType.Slash, new BinaryOperatorDescriptor(PrecMultiply, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Divide, r, pos)) },
+            { TokenType.Root, new BinaryOperatorDescriptor(PrecRoot, (l, r, pos) => new RootInfixExpression(l, r, pos)) },
+            { TokenType.Less, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Less, r, pos)) },
+            { TokenType.LessEqual, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.LessOrEqual, r, pos)) },
+            { TokenType.Greater, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Greater, r, pos)) },
+            { TokenType.GreaterEqual, new BinaryOperatorDescriptor(PrecComparison, (l, r, pos) => new BinaryExpression(l, BinaryOperator.GreaterOrEqual, r, pos)) },
+            { TokenType.Equal, new BinaryOperatorDescriptor(PrecEquality, (l, r, pos) => new BinaryExpression(l, BinaryOperator.Equal, r, pos)) },
+            { TokenType.EqualEqual, new BinaryOperatorDescriptor(PrecEquality, (l, r, pos) => new BinaryExpression(l, BinaryOperator.DoubleEqual, r, pos)) },
+            { TokenType.EqualEqualEqual, new BinaryOperatorDescriptor(PrecEquality, (l, r, pos) => new BinaryExpression(l, BinaryOperator.TripleEqual, r, pos)) },
+        };
+
+        public Parser(IReadOnlyList<Token> tokens, string source)
         {
             _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
+            _source = source ?? string.Empty;
             PushScope(); // global scope
         }
 
@@ -554,7 +621,7 @@ namespace DreamberdInterpreter
 
         private Expression ParseAssignment()
         {
-            Expression expr = ParseEquality();
+            Expression expr = ParseBinaryWithWhitespace();
 
             if (Match(TokenType.Assign))
             {
@@ -691,6 +758,120 @@ namespace DreamberdInterpreter
             }
 
             return expr;
+        }
+
+        private Expression ParseBinaryWithWhitespace(int minPrecedence = int.MinValue)
+        {
+            Expression left = ParseUnary();
+
+            while (true)
+            {
+                var op = TryPeekBinaryOperator();
+                if (op == null || op.Value.Precedence < minPrecedence)
+                    break;
+
+                _current += op.Value.TokensToConsume;
+                Expression right = ParseBinaryWithWhitespace(op.Value.Precedence + 1);
+
+                Expression built = op.Value.Descriptor.Builder(left, right, op.Value.OperatorToken.Position);
+                if (op.Value.Negate)
+                    built = new UnaryExpression(UnaryOperator.Not, built, op.Value.OperatorToken.Position);
+
+                left = built;
+            }
+
+            return left;
+        }
+
+        private BinaryOperatorMatch? TryPeekBinaryOperator()
+        {
+            if (IsAtEnd())
+                return null;
+
+            int opIndex = _current;
+            bool negate = false;
+
+            // Prefiksowy ';' nadal neguje operator porownania/rownosci.
+            if (Peek().Type == TokenType.Semicolon &&
+                _current + 1 < _tokens.Count &&
+                BinaryOperatorTable.ContainsKey(_tokens[_current + 1].Type) &&
+                IsNegatableOperator(_tokens[_current + 1].Type))
+            {
+                negate = true;
+                opIndex = _current + 1;
+            }
+
+            if (!BinaryOperatorTable.TryGetValue(_tokens[opIndex].Type, out var descriptor))
+                return null;
+
+            int precedence = ComputeEffectivePrecedence(opIndex, descriptor.BasePrecedence);
+            int tokensToConsume = (opIndex - _current) + 1; // 1 lub 2 (gdy jest poprzedzajacy ';')
+
+            return new BinaryOperatorMatch(descriptor, _tokens[opIndex], tokensToConsume, precedence, negate);
+        }
+
+        private static bool IsNegatableOperator(TokenType type) =>
+            type == TokenType.Equal ||
+            type == TokenType.EqualEqual ||
+            type == TokenType.EqualEqualEqual ||
+            type == TokenType.Less ||
+            type == TokenType.LessEqual ||
+            type == TokenType.Greater ||
+            type == TokenType.GreaterEqual;
+
+        private int ComputeEffectivePrecedence(int operatorIndex, int basePrecedence)
+        {
+            int leftSpaces = CountSpacesToLeft(operatorIndex);
+            int rightSpaces = CountSpacesToRight(operatorIndex);
+            int spaceCount = leftSpaces + rightSpaces;
+
+            // Mniej spacji => wieksze binding power; roznica jednej spacji bije bazowy precedens.
+            return (-spaceCount * WhitespacePrecedenceWeight) + basePrecedence;
+        }
+
+        private int CountSpacesToLeft(int operatorIndex)
+        {
+            int leftIndex = operatorIndex - 1;
+            while (leftIndex >= 0 && _tokens[leftIndex].Type == TokenType.Semicolon)
+                leftIndex--;
+
+            if (leftIndex < 0)
+                return 0;
+
+            return CountSpacesBetweenTokens(leftIndex, operatorIndex);
+        }
+
+        private int CountSpacesToRight(int operatorIndex)
+        {
+            int rightIndex = operatorIndex + 1;
+            while (rightIndex < _tokens.Count && _tokens[rightIndex].Type == TokenType.Semicolon)
+                rightIndex++;
+
+            if (rightIndex >= _tokens.Count || _tokens[rightIndex].Type == TokenType.EndOfFile)
+                return 0;
+
+            return CountSpacesBetweenTokens(operatorIndex, rightIndex);
+        }
+
+        private int CountSpacesBetweenTokens(int leftIndex, int rightIndex)
+        {
+            int start = leftIndex >= 0
+                ? _tokens[leftIndex].Position + _tokens[leftIndex].Lexeme.Length
+                : 0;
+
+            int end = _tokens[rightIndex].Position;
+            if (end <= start)
+                return 0;
+
+            int spaces = 0;
+            for (int i = start; i < end && i < _source.Length; i++)
+            {
+                char c = _source[i];
+                if (c == ' ' || c == '\t')
+                    spaces++;
+            }
+
+            return spaces;
         }
 
         private Expression ParseEquality()

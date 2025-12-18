@@ -253,6 +253,15 @@ assertEq("i as identifier still supports i++", 6, (iVar++) + 1)!
 print("")!
 
 // --------------------------------------------
+print("== 14) Significant whitespace in arithmetic ==")!
+// --------------------------------------------
+assertEq("fewer spaces => higher precedence", 24, 10-2  *3)!
+assertEq("more spaces around '-' lets * bind first", 4, 10 - 2* 3)!
+assertEq("double spaces delay that operator", 9, 1+2  +3*2)!
+
+print("")!
+
+// --------------------------------------------
 print("== Summary ==")!
 print("passed: " + passed)!
 print("failed: " + failed)!

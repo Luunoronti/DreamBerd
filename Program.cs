@@ -85,7 +85,7 @@ namespace DreamberdInterpreter
         {
             var lexer = new Lexer(source);
             var tokens = lexer.Tokenize();
-            var parser = new Parser(tokens);
+            var parser = new Parser(tokens, source);
             var program = parser.ParseProgram();
             evaluator.ExecuteProgram(program);
         }

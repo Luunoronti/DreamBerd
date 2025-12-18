@@ -253,6 +253,15 @@ assertEq("i jako ident nie blokuje i++", 6, (iVar++) + 1)!
 print("")!
 
 // --------------------------------------------
+print("== 14) Znaczące spacje w arytmetyce ==")!
+// --------------------------------------------
+assertEq("mniej spacji => wyzszy priorytet", 24, 10-2  *3)!
+assertEq("wiecej spacji przy '-' => * wchodzi pierwsze", 4, 10 - 2* 3)!
+assertEq("podwojne spacje opozniaja operator", 9, 1+2  +3*2)!
+
+print("")!
+
+// --------------------------------------------
 print("== Summary ==")!
 print("passed: " + passed)!
 print("failed: " + failed)!
