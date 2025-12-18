@@ -114,8 +114,8 @@ Legenda:
 ## 🟡 Mamy, ale inaczej / niepełne (względem README)
 
 - 🟡 Mutability `const var` / `var var` nie wspiera „mutacji obiektów” (brak metod jak `push/pop`, brak obiektów).
-- 🟡 Naming: wspieramy Unicode *litery*, ale nie wspieramy emoji jako nazw, ani pełnego „number naming”.
-- 🟡 "Number names": slowa liczb po angielsku (`zero`..`nineteen`, `twenty`..`ninety`, skale do `quintillion`) i po polsku (`jeden`..`dziewietnascie`, `dwadziescia`.., skale do `trylionu`); parsujemy na literal tylko gdy slowa nie sa nazwami w scope i dopoki nie trafimy na nieznane slowo (wtedy literal zmienia sie w string calkowitego wejscia). `toNumber("...")` rozumie te same slowa. Brak ulamkow / `twenty-one` / polskich ulamkow / znaku minus.
+- ✅ Naming: Unicode/emoji identyfikatory, keywordy jako nazwy, cyfry jako nazwy; puste nazwy przez `""` też działają. Token liczbowy w wyrażeniu najpierw próbuje znaleźć zmienną/funkcję o takiej nazwie, dopiero potem jest literalem.
+- 🟡 "Number names": slowa liczb po angielsku (`zero`..`nineteen`, `twenty`..`ninety`, skale do `quintillion`) i po polsku (`jeden`..`dziewietnascie`, `dwadziescia`.., skale do `trylionu`); parsujemy na literal tylko gdy slowa nie sa nazwami w scope i dopoki nie trafimy na nieznane slowo (wtedy literal zmienia sie w string calkowitego wejscia). Tokeny cyfr też mogą być nazwami (fallback do literalu przy braku nazwy). Brak ulamkow / `twenty-one` / polskich ulamkow / znaku minus.
 
 ---
 
@@ -124,7 +124,6 @@ Legenda:
 ### Składnia / whitespace / parser-quirks
 
 - ❌ Narzucone indenty: dokładnie 3 spacje (i -3 spacje).
-- ❌ Rozszerzone nazewnictwo: emoji, puste nazwy, nazwy będące keywordami, pełny „number naming”.
 - ❌ Pełny model „editable vs re-assignable” (mutacje struktur/obiektów jak `push/pop`).
 - ❌ Kasowanie keywordów/paradygmatów (`delete class`, `delete delete`, …).
 - ❌ AQMI / AI / Copilot gag-features z README.
@@ -174,7 +173,6 @@ Legenda:
 - ❌ `delete class!`, `delete delete!` itd. (kasowanie słów kluczowych / paradygmatów).
 
 ### Inne
-- ❌ Rozbudowane „naming” (np. deklaracje ze stringową nazwą, nazwy będące cyframi, itp.).
 
 
 ---

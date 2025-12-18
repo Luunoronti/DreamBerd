@@ -334,10 +334,39 @@ case '<':
             AddToken(type, null);
         }
 
-        private static bool IsIdentifierStart(char c) =>
-            char.IsLetter(c) || c == '_' || c == '$';
+        private static bool IsIdentifierStart(char c)
+        {
+            if (IsOperatorChar(c))
+                return false;
 
-        private static bool IsIdentifierPart(char c) =>
-            char.IsLetterOrDigit(c) || c == '_' || c == '$';
+            var cat = CharUnicodeInfo.GetUnicodeCategory(c);
+            return char.IsLetter(c)
+                || cat == UnicodeCategory.OtherSymbol
+                || cat == UnicodeCategory.CurrencySymbol
+                || cat == UnicodeCategory.MathSymbol
+                || cat == UnicodeCategory.ModifierSymbol
+                || cat == UnicodeCategory.ModifierLetter
+                || cat == UnicodeCategory.LetterNumber
+                || cat == UnicodeCategory.OtherLetter
+                || char.IsSurrogate(c)
+                || c == '_' || c == '$';
+        }
+
+        private static bool IsIdentifierPart(char c)
+        {
+            if (IsOperatorChar(c))
+                return false;
+
+            var cat = CharUnicodeInfo.GetUnicodeCategory(c);
+            return IsIdentifierStart(c)
+                || char.IsDigit(c)
+                || cat == UnicodeCategory.ConnectorPunctuation
+                || cat == UnicodeCategory.NonSpacingMark
+                || cat == UnicodeCategory.SpacingCombiningMark
+                || char.IsSurrogate(c);
+        }
+
+        private static bool IsOperatorChar(char c) =>
+            c is '+' or '-' or '*' or '/' or '\\' or '%' or '&' or '|' or '^' or '!' or '?' or ':' or '<' or '>' or '=' or '[' or ']' or '{' or '}' or ',' or ';' or '.';
     }
 }

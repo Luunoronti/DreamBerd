@@ -114,8 +114,8 @@ Legend:
 ## 🟡 Implemented, but different / incomplete (vs README)
 
 - 🟡 `const var` / `var var` “editable” semantics are not implemented (no objects, no methods like `push/pop`).
-- 🟡 Naming: we support Unicode *letters*, but not emoji identifiers, and not full “number naming”.
-- 🟡 "Number names": English words (`zero`..`nineteen`, `twenty`..`ninety`, scales up to `quintillion`) + Polish words (`jeden`..`dziewietnascie`, `dwadziescia`.., scales up to `trylion`); parsed to a number only if none of the words are names in scope and until an unknown word shows up (then the literal becomes the full input string). `toNumber("...")` understands the same words. No fractions / `twenty-one` / Polish fractional / negatives yet.
+- ✅ Naming: Unicode/emoji identifiers, keywords as names, digit-only names; empty names via `""` also work. A numeric token in an expression first tries to resolve a variable/function of that name, otherwise it stays a literal.
+- 🟡 "Number names": English words (`zero`..`nineteen`, `twenty`..`ninety`, scales up to `quintillion`) + Polish words (`jeden`..`dziewietnascie`, `dwadziescia`.., scales up to `trylion`); parsed to a number only if none of the words are names in scope and until an unknown word shows up (then the literal becomes the full input string). Digit tokens can also be names (fall back to literal if no such name exists). No fractions / `twenty-one` / Polish fractional / negatives yet.
 
 ---
 
@@ -124,7 +124,6 @@ Legend:
 
 ### Syntax / whitespace / parser quirks
 - ❌ Indentation rule: exactly 3 spaces (and -3 spaces).
-- ❌ Extended naming: emoji names, empty names, keyword names, full “number naming”.
 - ❌ Full “editable vs re-assignable” model (mutating structures/objects like `push/pop`).
 - ❌ Deleting keywords/paradigms (`delete class`, `delete delete`, …).
 - ❌ AQMI / AI / Copilot gag-features from the README.
@@ -174,7 +173,6 @@ Legend:
 - ❌ `delete class!`, `delete delete!`, etc. (deleting keywords / paradigms).
 
 ### Other
-- ❌ Extended “naming” (e.g. declarations with string names, names being digits, etc.).
 
 
 

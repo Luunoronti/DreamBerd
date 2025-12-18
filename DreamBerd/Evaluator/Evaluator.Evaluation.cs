@@ -76,6 +76,14 @@ namespace DreamberdInterpreter
                     result = EvaluateIdentifier(ident);
                     break;
 
+                case NumberIdentifierExpression numIdent:
+                    result = EvaluateNumberIdentifier(numIdent);
+                    break;
+
+                case StringIdentifierExpression strIdent:
+                    result = EvaluateStringIdentifier(strIdent);
+                    break;
+
                 case UnaryExpression unary:
                     result = EvaluateUnary(unary);
                     break;
@@ -333,25 +341,60 @@ case TryAgainStatement tas:
             }
         }
 
-        private Value EvaluateIdentifier(IdentifierExpression ident)
+        private bool TryResolveName(string name, out Value value)
         {
+            value = default!;
+
             // najpierw zmienne lokalne funkcji
             if (_callStack.Count > 0)
             {
                 var frame = _callStack.Peek();
-                if (frame.Locals.TryGetValue(ident.Name, out var localValue))
-                    return localValue;
+                if (frame.Locals.TryGetValue(name, out var localValue))
+                {
+                    value = localValue;
+                    return true;
+                }
             }
 
             // const const const
-            if (_constStore.TryGet(ident.Name, out var globalValue))
-                return globalValue;
+            if (_constStore.TryGet(name, out var globalValue))
+            {
+                value = globalValue;
+                return true;
+            }
 
             // globalne zmienne w VariableStore
-            if (_variables.TryGet(ident.Name, out var varValue))
-                return varValue;
+            if (_variables.TryGet(name, out var varValue))
+            {
+                value = varValue;
+                return true;
+            }
+
+            return false;
+        }
+
+        private Value EvaluateIdentifier(IdentifierExpression ident)
+        {
+            if (TryResolveName(ident.Name, out var value))
+                return value;
 
             // fallback: string z nazwą
+            return Value.FromString(ident.Name);
+        }
+
+        private Value EvaluateNumberIdentifier(NumberIdentifierExpression ident)
+        {
+            if (TryResolveName(ident.Name, out var value))
+                return value;
+
+            return Value.FromNumber(ident.NumberValue);
+        }
+
+        private Value EvaluateStringIdentifier(StringIdentifierExpression ident)
+        {
+            if (TryResolveName(ident.Name, out var value))
+                return value;
+
             return Value.FromString(ident.Name);
         }
         private Value EvaluateUnary(UnaryExpression unary)
@@ -692,32 +735,32 @@ case TryAgainStatement tas:
         {
             mutatedName = null;
 
-            if (target is IdentifierExpression ident)
+            if (TryGetName(target, out var idName))
             {
-                if (_constStore.TryGet(ident.Name, out _))
-                    throw new InterpreterException($"Cannot assign to const const const variable '{ident.Name}'.", position);
+                if (_constStore.TryGet(idName, out _))
+                    throw new InterpreterException($"Cannot assign to const const const variable '{idName}'.", position);
 
                 // funkcja lokalna
                 if (_callStack.Count > 0)
                 {
                     var frame = _callStack.Peek();
-                    if (frame.Locals.ContainsKey(ident.Name))
+                    if (frame.Locals.ContainsKey(idName))
                     {
-                        var currentLocal = frame.Locals[ident.Name];
+                        var currentLocal = frame.Locals[idName];
                         assign = v =>
                         {
-                            frame.Locals[ident.Name] = v;
+                            frame.Locals[idName] = v;
                         };
-                        mutatedName = ident.Name;
+                        mutatedName = idName;
                         return currentLocal;
                     }
                 }
 
-                if (!_variables.TryGet(ident.Name, out var value))
-                    throw new InterpreterException($"Variable '{ident.Name}' is not defined.", position);
+                if (!_variables.TryGet(idName, out var value))
+                    throw new InterpreterException($"Variable '{idName}' is not defined.", position);
 
-                assign = v => _variables.Assign(ident.Name, v, _currentStatementIndex);
-                mutatedName = ident.Name;
+                assign = v => _variables.Assign(idName, v, _currentStatementIndex);
+                mutatedName = idName;
                 return value;
             }
 
@@ -731,28 +774,27 @@ case TryAgainStatement tas:
                 double index = ToNumberAt(indexVal, idx.Index.Position);
 
                 var dict = new Dictionary<double, Value>(container.Array);
-                mutatedName = (idx.Target is IdentifierExpression idt) ? idt.Name : null;
+                mutatedName = TryGetName(idx.Target, out var idxName) ? idxName : null;
 
                 assign = v =>
                 {
                     dict[index] = v;
 
-                    if (idx.Target is IdentifierExpression arrIdent &&
-                        !_constStore.TryGet(arrIdent.Name, out _))
+                    if (TryGetName(idx.Target, out var arrName) && !_constStore.TryGet(arrName, out _))
                     {
                         Value newArray = Value.FromArray(dict);
 
                         if (_callStack.Count > 0)
                         {
                             var frame = _callStack.Peek();
-                            if (frame.Locals.ContainsKey(arrIdent.Name))
+                            if (frame.Locals.ContainsKey(arrName))
                             {
-                                frame.Locals[arrIdent.Name] = newArray;
+                                frame.Locals[arrName] = newArray;
                                 return;
                             }
                         }
 
-                        _variables.Assign(arrIdent.Name, newArray, _currentStatementIndex);
+                        _variables.Assign(arrName, newArray, _currentStatementIndex);
                     }
                 };
 
@@ -770,10 +812,8 @@ case TryAgainStatement tas:
 
         private Value EvaluateCall(CallExpression call)
         {
-            if (call.Callee is IdentifierExpression ident)
+            if (TryGetCalleeName(call.Callee, out var name))
             {
-                var name = ident.Name;
-
                 // built-iny
                 if (string.Equals(name, "print", StringComparison.Ordinal))
                 {
@@ -813,47 +853,62 @@ case TryAgainStatement tas:
                 }
 
             }
-            string calleeName = call.Callee is IdentifierExpression id ? id.Name : call.Callee.GetType().Name;
+            string calleeName = TryGetCalleeName(call.Callee, out var idName) ? idName : call.Callee.GetType().Name;
             throw new InterpreterException($"Invalid function call on '{calleeName}'.", call.Position);
+        }
 
-            //throw new InterpreterException(
-            //    "Only the built-in functions print(...), previous(...), next(...), history(...), " +
-            //    "and user-defined functions are supported at this time.");
+        private static bool TryGetCalleeName(Expression expr, out string name)
+        {
+            switch (expr)
+            {
+                case IdentifierExpression ident:
+                    name = ident.Name;
+                    return true;
+                case NumberIdentifierExpression numIdent:
+                    name = numIdent.Name;
+                    return true;
+                case StringIdentifierExpression strIdent:
+                    name = strIdent.Name;
+                    return true;
+                default:
+                    name = string.Empty;
+                    return false;
+            }
         }
         private Value EvaluatePreviousCall(CallExpression call)
         {
-            if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
+            if (call.Arguments.Count != 1 || !TryGetName(call.Arguments[0], out var targetName))
                 throw new InterpreterException("previous(x) expects a single identifier argument.", call.Position);
 
-            if (!_variables.TryPrevious(id.Name, out var newVal, out var changed))
+            if (!_variables.TryPrevious(targetName, out var newVal, out var changed))
                 return Value.Undefined;
 
             if (changed)
-                OnVariableMutated(id.Name);
+                OnVariableMutated(targetName);
 
             return newVal;
         }
 
         private Value EvaluateNextCall(CallExpression call)
         {
-            if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
+            if (call.Arguments.Count != 1 || !TryGetName(call.Arguments[0], out var targetName))
                 throw new InterpreterException("next(x) expects a single identifier argument.", call.Position);
 
-            if (!_variables.TryNext(id.Name, out var newVal, out var changed))
+            if (!_variables.TryNext(targetName, out var newVal, out var changed))
                 return Value.Undefined;
 
             if (changed)
-                OnVariableMutated(id.Name);
+                OnVariableMutated(targetName);
 
             return newVal;
         }
 
         private Value EvaluateHistoryCall(CallExpression call)
         {
-            if (call.Arguments.Count != 1 || call.Arguments[0] is not IdentifierExpression id)
+            if (call.Arguments.Count != 1 || !TryGetName(call.Arguments[0], out var targetName))
                 throw new InterpreterException("history(x) expects a single identifier argument.", call.Position);
 
-            if (!_variables.TryGetHistory(id.Name, out var values, out var currentIndex) ||
+            if (!_variables.TryGetHistory(targetName, out var values, out var currentIndex) ||
                 values.Count == 0)
             {
                 return Value.FromArray(new Dictionary<double, Value>());
@@ -867,6 +922,25 @@ case TryAgainStatement tas:
             }
 
             return Value.FromArray(dict);
+        }
+
+        private static bool TryGetName(Expression expr, out string name)
+        {
+            switch (expr)
+            {
+                case IdentifierExpression id:
+                    name = id.Name;
+                    return true;
+                case NumberIdentifierExpression numId:
+                    name = numId.Name;
+                    return true;
+                case StringIdentifierExpression strId:
+                    name = strId.Name;
+                    return true;
+                default:
+                    name = string.Empty;
+                    return false;
+            }
         }
 
         private Value EvaluateToNumberCall(CallExpression call)

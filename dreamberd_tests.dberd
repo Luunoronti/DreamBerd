@@ -353,6 +353,34 @@ assertEq("when loopX ==== 8 without () fires once => 1", 1, whenHitsNoParens)!
 print("")!
 
 // --------------------------------------------
+print("== 17) Rozszerzone nazwy (emoji/keyword/cyfry/puste) ==")!
+// --------------------------------------------
+var var 5 = 0!
+var var i = 5 + 1!
+assertEq("var var 5 = 0! ; 5 + 1 => 1", 1, i)!
+assertEq("7 + 1 bez var 7 => 8", 8, 7 + 1)!
+
+function 5 x => x + 2!
+assertEq("function 5 x => x + 2! ; 5 3 => 5", 2 + 3, 5 3)!
+
+function return x => x * 2!
+assertEq("function return x => x * 2! ; return 4 => 8", 8, return 4)!
+
+var var if = 3!
+assertEq("keyword if jako nazwa; if + 2 => 5", 2 + 3, if + 2)!
+
+var var 😀 = 10!
+😀 :+ 1!
+assertEq("emoji 😀 :+ 1! => 11", 11, 😀)!
+
+var var "" = 123!
+assertEq('var var "" = 123! ; "" => 123', 123, "")!
+"" :+ 1!
+assertEq('"" :+ 1! => 124', 124, "")!
+
+print("")!
+
+// --------------------------------------------
 print("== Summary ==")!
 print("passed: " + passed)!
 print("failed: " + failed)!

@@ -355,6 +355,30 @@ namespace DreamberdInterpreter
         }
     }
 
+    public sealed class NumberIdentifierExpression : Expression
+    {
+        public string Name { get; }
+        public double NumberValue { get; }
+
+        public NumberIdentifierExpression(string name, double numberValue, int position)
+            : base(position)
+        {
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+            NumberValue = numberValue;
+        }
+    }
+
+    public sealed class StringIdentifierExpression : Expression
+    {
+        public string Name { get; }
+
+        public StringIdentifierExpression(string name, int position)
+            : base(position)
+        {
+            Name = name ?? string.Empty;
+        }
+    }
+
     public sealed class UnaryExpression : Expression
     {
         public UnaryOperator Operator { get; }

@@ -8,6 +8,7 @@ namespace DreamberdInterpreter
         private int _current;
 
         private readonly Stack<HashSet<string>> _scopeStack = new Stack<HashSet<string>>();
+        private bool _allowStatementKeywordsAsArgs = true;
 
         private static readonly Dictionary<string, ulong> NumberUnits = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
         {
@@ -108,6 +109,7 @@ namespace DreamberdInterpreter
             ["thounsand"] = "thousand",
             ["thounsands"] = "thousand",
             ["thousandths"] = "thousand", // pelny plural - tez sprowadzamy
+            ["sto"] = "hundred"
         };
 
         // Precedens bazowy poszczegolnych operatorow; realny precedens wyznacza liczba spacji.
@@ -174,6 +176,44 @@ namespace DreamberdInterpreter
             { TokenType.EqualEqual, new BinaryOperatorDescriptor(PrecEquality, (l, r, pos) => new BinaryExpression(l, BinaryOperator.DoubleEqual, r, pos)) },
             { TokenType.EqualEqualEqual, new BinaryOperatorDescriptor(PrecEquality, (l, r, pos) => new BinaryExpression(l, BinaryOperator.TripleEqual, r, pos)) },
         };
+
+        private static bool IsNameTokenType(TokenType type) => type switch
+        {
+            TokenType.Identifier => true,
+            TokenType.Number => true,
+            TokenType.String => true,
+            TokenType.Const => true,
+            TokenType.Var => true,
+            TokenType.Reverse => true,
+            TokenType.Forward => true,
+            TokenType.Delete => true,
+            TokenType.When => true,
+            TokenType.If => true,
+            TokenType.Else => true,
+            TokenType.Idk => true,
+            TokenType.Return => true,
+            TokenType.While => true,
+            TokenType.Break => true,
+            TokenType.Continue => true,
+            _ => false
+        };
+
+        private static bool IsStatementKeywordToken(TokenType type) =>
+            type == TokenType.Return
+            || type == TokenType.Break
+            || type == TokenType.Continue;
+
+        private Token ConsumeNameToken(string message)
+        {
+            if (IsNameTokenType(Peek().Type))
+                return Advance();
+
+            Fatal(Peek(), message);
+            return Peek(); // unreachable
+        }
+
+        private static string TokenToName(Token token) =>
+            token.Type == TokenType.String ? (token.Literal as string ?? string.Empty) : token.Lexeme;
 
         public Parser(IReadOnlyList<Token> tokens, string source)
         {
@@ -278,7 +318,7 @@ namespace DreamberdInterpreter
                 return false;
 
             // nazwa moze byc po keywordzie; zezwalamy na brak nawiasów
-            return PeekType(1) == TokenType.Identifier;
+            return IsNameTokenType(PeekType(1));
         }
 
         private Statement ParseStatement()
@@ -448,8 +488,8 @@ namespace DreamberdInterpreter
             int funcPos = Peek().Position;
             Advance(); // zjadamy keyword (Identifier)
 
-            Token nameTok = Consume(TokenType.Identifier, "Expected function name.");
-            string name = nameTok.Lexeme;
+            Token nameTok = ConsumeNameToken("Expected function name.");
+            string name = TokenToName(nameTok);
             DeclareName(name); // nazwa funkcji widoczna w otaczajacym scope
 
             PushScope(); // scope funkcji (parametry + cialo)
@@ -462,12 +502,10 @@ namespace DreamberdInterpreter
                     if (Match(TokenType.Comma))
                         continue;
 
-                    if (!Check(TokenType.Identifier))
-                        Fatal(Peek(), "Expected parameter name or '=>' after function name.");
-
-                    Token paramTok = Advance();
-                    parameters.Add(paramTok.Lexeme);
-                    DeclareName(paramTok.Lexeme);
+                    Token paramTok = ConsumeNameToken("Expected parameter name or '=>' after function name.");
+                    string paramName = TokenToName(paramTok);
+                    parameters.Add(paramName);
+                    DeclareName(paramName);
                 }
 
                 Consume(TokenType.Arrow, "Expected '=>' after function parameter list.");
@@ -554,8 +592,8 @@ namespace DreamberdInterpreter
                 else mutability = Mutability.VarVar;
             }
 
-            Token nameTok = Consume(TokenType.Identifier, "Expected variable name.");
-            string name = nameTok.Lexeme;
+            Token nameTok = ConsumeNameToken("Expected variable name.");
+            string name = TokenToName(nameTok);
 
             LifetimeSpecifier lifetime = LifetimeSpecifier.None;
             if (Match(TokenType.Less))
@@ -603,7 +641,10 @@ namespace DreamberdInterpreter
 
         private Statement ParseWhenStatement(int position)
         {
+            bool prevAllow = _allowStatementKeywordsAsArgs;
+            _allowStatementKeywordsAsArgs = false;
             Expression condition = ParseExpression();
+            _allowStatementKeywordsAsArgs = prevAllow;
 
             // Na razie wspieramy:
             // when (cond) expr!
@@ -759,12 +800,13 @@ namespace DreamberdInterpreter
 
         private Expression? TryParseUpdateTarget()
         {
-            if (!Check(TokenType.Identifier))
+            if (!IsNameTokenType(Peek().Type))
                 return null;
 
             Advance();
             var idTok = Previous();
-            Expression expr = new IdentifierExpression(idTok.Lexeme, idTok.Position);
+            string name = TokenToName(idTok);
+            Expression expr = new IdentifierExpression(name, idTok.Position);
 
             while (Match(TokenType.LeftBracket))
             {
@@ -778,7 +820,10 @@ namespace DreamberdInterpreter
 
         private Statement ParseIfStatement(int position)
         {
+            bool prevAllow = _allowStatementKeywordsAsArgs;
+            _allowStatementKeywordsAsArgs = false;
             var condition = ParseExpression();
+            _allowStatementKeywordsAsArgs = prevAllow;
 
             // Dopuszczamy zarówno pojedynczy statement (np. expr!), jak i blok { ... }
             var thenStmt = ParseStatement();
@@ -803,7 +848,10 @@ namespace DreamberdInterpreter
 
         private Statement ParseWhileStatement(int position)
         {
+            bool prevAllow = _allowStatementKeywordsAsArgs;
+            _allowStatementKeywordsAsArgs = false;
             Expression condition = ParseExpression();
+            _allowStatementKeywordsAsArgs = prevAllow;
 
             // podobnie jak w if: body może być pojedynczym statementem albo blokiem
             Statement body = ParseStatement();
@@ -823,6 +871,16 @@ namespace DreamberdInterpreter
                 if (expr is IdentifierExpression ident)
                 {
                     return new AssignmentExpression(ident.Name, value, ident.Position);
+                }
+
+                if (expr is NumberIdentifierExpression numIdent)
+                {
+                    return new AssignmentExpression(numIdent.Name, value, numIdent.Position);
+                }
+
+                if (expr is StringIdentifierExpression strIdent)
+                {
+                    return new AssignmentExpression(strIdent.Name, value, strIdent.Position);
                 }
 
                 if (expr is IndexExpression idx)
@@ -1370,9 +1428,7 @@ Expression ParsePower()
             }
 
             bool IsArgumentStart(TokenType type) =>
-                type == TokenType.Identifier ||
-                type == TokenType.Number ||
-                type == TokenType.String ||
+                (IsNameTokenType(type) && (_allowStatementKeywordsAsArgs || !IsStatementKeywordToken(type))) ||
                 type == TokenType.Semicolon ||
                 type == TokenType.LeftBracket;
 
@@ -1388,9 +1444,11 @@ Expression ParsePower()
             bool IsAssignable(Expression e)
             {
                 return e is IdentifierExpression
+                    || e is NumberIdentifierExpression
+                    || e is StringIdentifierExpression
                     || e is IndexExpression
                     || (e is PostfixUpdateExpression p &&
-                        (p.Target is IdentifierExpression || p.Target is IndexExpression));
+                        (p.Target is IdentifierExpression || p.Target is NumberIdentifierExpression || p.Target is StringIdentifierExpression || p.Target is IndexExpression));
             }
 
             while (Match(TokenType.StarRun))
@@ -1459,65 +1517,74 @@ Expression ParsePower()
             {
                 var t = Previous();
                 double value = (double)(t.Literal ?? 0.0);
-                return new LiteralExpression(Value.FromNumber(value), t.Position);
+                return new NumberIdentifierExpression(t.Lexeme, value, t.Position);
             }
 
             if (Match(TokenType.String))
             {
                 var t = Previous();
                 string text = t.Literal as string ?? string.Empty;
+                if (text.Length == 0)
+                    return new StringIdentifierExpression(text, t.Position);
                 return new LiteralExpression(Value.FromString(text), t.Position);
             }
 
 
-            if (Check(TokenType.Identifier))
+            if (IsNameTokenType(Peek().Type))
             {
-                int savedIndex = _current;
-                if (TryParseNumberNameLiteral(out var numValue, out var consumed, out var litPos, out var fallbackToString, out var fallbackStart))
+                if (Peek().Type == TokenType.Identifier)
                 {
-                    _current += consumed;
-                    return new LiteralExpression(Value.FromNumber((double)numValue), litPos);
-                }
-
-                if (fallbackToString)
-                {
-                    int j = fallbackStart;
-                    var parts = new List<string>();
-                    while (j < _tokens.Count &&
-                           _tokens[j].Type != TokenType.Bang &&
-                           _tokens[j].Type != TokenType.Question &&
-                           _tokens[j].Type != TokenType.EndOfFile)
+                    int savedIndex = _current;
+                    if (TryParseNumberNameLiteral(out var numValue, out var consumed, out var litPos, out var fallbackToString, out var fallbackStart))
                     {
-                        parts.Add(_tokens[j].Lexeme);
-                        j++;
+                        _current += consumed;
+                        return new LiteralExpression(Value.FromNumber((double)numValue), litPos);
                     }
 
-                    _current = j;
-                    string raw = string.Join(" ", parts);
-                    return new LiteralExpression(Value.FromString(raw), litPos);
+                    if (fallbackToString)
+                    {
+                        int j = fallbackStart;
+                        var parts = new List<string>();
+                        while (j < _tokens.Count &&
+                               _tokens[j].Type != TokenType.Bang &&
+                               _tokens[j].Type != TokenType.Question &&
+                               _tokens[j].Type != TokenType.EndOfFile)
+                        {
+                            parts.Add(_tokens[j].Lexeme);
+                            j++;
+                        }
+
+                        _current = j;
+                        string raw = string.Join(" ", parts);
+                        return new LiteralExpression(Value.FromString(raw), litPos);
+                    }
+
+                    _current = savedIndex;
                 }
 
-                _current = savedIndex;
                 Advance();
 
                 var t = Previous();
-                string name = t.Lexeme;
+                string name = TokenToName(t);
                 int pos = t.Position;
 
                 // Booleany i undefined jako literaly Dreamberda
-                switch (name)
+                if (t.Type == TokenType.Identifier)
                 {
-                    case "true":
-                        return new LiteralExpression(Value.FromBoolean(true), pos);
-                    case "false":
-                        return new LiteralExpression(Value.FromBoolean(false), pos);
-                    case "maybe":
-                        return new LiteralExpression(Value.Maybe, pos);
-                    case "undefined":
-                        return new LiteralExpression(Value.Undefined, pos);
-                    default:
-                        return new IdentifierExpression(name, pos);
+                    switch (name)
+                    {
+                        case "true":
+                            return new LiteralExpression(Value.FromBoolean(true), pos);
+                        case "false":
+                            return new LiteralExpression(Value.FromBoolean(false), pos);
+                        case "maybe":
+                            return new LiteralExpression(Value.Maybe, pos);
+                        case "undefined":
+                            return new LiteralExpression(Value.Undefined, pos);
+                    }
                 }
+
+                return new IdentifierExpression(name, pos);
             }
 
             if (Match(TokenType.LeftParen))
