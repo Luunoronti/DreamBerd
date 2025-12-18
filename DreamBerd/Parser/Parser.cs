@@ -30,7 +30,28 @@ namespace DreamberdInterpreter
             ["sixteen"] = 16,
             ["seventeen"] = 17,
             ["eighteen"] = 18,
-            ["nineteen"] = 19
+            ["nineteen"] = 19,
+
+            // PL
+            ["jeden"] = 1,
+            ["dwa"] = 2,
+            ["trzy"] = 3,
+            ["cztery"] = 4,
+            ["piec"] = 5,
+            ["szesc"] = 6,
+            ["siedem"] = 7,
+            ["osiem"] = 8,
+            ["dziewiec"] = 9,
+            ["dziesiec"] = 10,
+            ["jedenascie"] = 11,
+            ["dwanascie"] = 12,
+            ["trzynascie"] = 13,
+            ["czternascie"] = 14,
+            ["pietnascie"] = 15,
+            ["szesnascie"] = 16,
+            ["siedemnascie"] = 17,
+            ["osiemnascie"] = 18,
+            ["dziewietnascie"] = 19
         };
 
         private static readonly Dictionary<string, ulong> NumberTens = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
@@ -42,7 +63,17 @@ namespace DreamberdInterpreter
             ["sixty"] = 60,
             ["seventy"] = 70,
             ["eighty"] = 80,
-            ["ninety"] = 90
+            ["ninety"] = 90,
+
+            // PL
+            ["dwadziescia"] = 20,
+            ["trzydziesci"] = 30,
+            ["czterdziesci"] = 40,
+            ["piecdziesiat"] = 50,
+            ["szescdziesiat"] = 60,
+            ["siedemdziesiat"] = 70,
+            ["osiemdziesiat"] = 80,
+            ["dziewiecdziesiat"] = 90
         };
 
         private static readonly Dictionary<string, ulong> NumberScales = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
@@ -52,7 +83,16 @@ namespace DreamberdInterpreter
             ["billion"] = 1_000_000_000,
             ["trillion"] = 1_000_000_000_000,
             ["quadrillion"] = 1_000_000_000_000_000,
-            ["quintillion"] = 1_000_000_000_000_000_000 // max w ulong
+            ["quintillion"] = 1_000_000_000_000_000_000, // max w ulong
+
+            // PL
+            ["tysiac"] = 1_000,
+            ["tysiace"] = 1_000,
+            ["milion"] = 1_000_000,
+            ["miliard"] = 1_000_000_000,
+            ["bilion"] = 1_000_000_000_000,
+            ["biliard"] = 1_000_000_000_000_000,
+            ["trylion"] = 1_000_000_000_000_000_000
         };
 
         // aliasy / najczestsze literowki, zanim trafimy do wlasciwych slownikow
@@ -237,7 +277,7 @@ namespace DreamberdInterpreter
                 || lex == "f"))
                 return false;
 
-            // musi byc nazwa funkcji po keywordzie, inaczej traktujemy to jako zwykly ident (np. 'f :>> 2!')
+            // nazwa moze byc po keywordzie; zezwalamy na brak nawiasów
             return PeekType(1) == TokenType.Identifier;
         }
 
@@ -415,21 +455,21 @@ namespace DreamberdInterpreter
             PushScope(); // scope funkcji (parametry + cialo)
             try
             {
-                Consume(TokenType.LeftParen, "Expected '(' after function name.");
-
                 var parameters = new List<string>();
-                if (!Check(TokenType.RightParen))
+
+                while (!Check(TokenType.Arrow))
                 {
-                    do
-                    {
-                        Token paramTok = Consume(TokenType.Identifier, "Expected parameter name.");
-                        parameters.Add(paramTok.Lexeme);
-                        DeclareName(paramTok.Lexeme);
-                    }
-                    while (Match(TokenType.Comma));
+                    if (Match(TokenType.Comma))
+                        continue;
+
+                    if (!Check(TokenType.Identifier))
+                        Fatal(Peek(), "Expected parameter name or '=>' after function name.");
+
+                    Token paramTok = Advance();
+                    parameters.Add(paramTok.Lexeme);
+                    DeclareName(paramTok.Lexeme);
                 }
 
-                Consume(TokenType.RightParen, "Expected ')' after function parameters.");
                 Consume(TokenType.Arrow, "Expected '=>' after function parameter list.");
 
                 // body: albo expression (stary styl), albo blok { ... }
@@ -563,9 +603,7 @@ namespace DreamberdInterpreter
 
         private Statement ParseWhenStatement(int position)
         {
-            Consume(TokenType.LeftParen, "Expected '(' after 'when'.");
             Expression condition = ParseExpression();
-            Consume(TokenType.RightParen, "Expected ')' after when condition.");
 
             // Na razie wspieramy:
             // when (cond) expr!
@@ -740,9 +778,7 @@ namespace DreamberdInterpreter
 
         private Statement ParseIfStatement(int position)
         {
-            Consume(TokenType.LeftParen, "Expected '(' after 'if'.");
             var condition = ParseExpression();
-            Consume(TokenType.RightParen, "Expected ')' after if condition.");
 
             // Dopuszczamy zarówno pojedynczy statement (np. expr!), jak i blok { ... }
             var thenStmt = ParseStatement();
@@ -767,9 +803,7 @@ namespace DreamberdInterpreter
 
         private Statement ParseWhileStatement(int position)
         {
-            Consume(TokenType.LeftParen, "Expected '(' after 'while'.");
             Expression condition = ParseExpression();
-            Consume(TokenType.RightParen, "Expected ')' after while condition.");
 
             // podobnie jak w if: body może być pojedynczym statementem albo blokiem
             Statement body = ParseStatement();
@@ -1026,7 +1060,7 @@ namespace DreamberdInterpreter
             for (int i = start; i < end && i < _source.Length; i++)
             {
                 char c = _source[i];
-                if (c == ' ' || c == '\t')
+                if (c == ' ' || c == '\t' || c == '(' || c == ')')
                     spaces++;
             }
 
@@ -1282,37 +1316,65 @@ Expression ParsePower()
             // 1) Najpierw klasyczne postfixy: call / index (i ewentualnie kolejne chainy)
             while (true)
             {
-                // Call: foo(...)
-                if (Match(TokenType.LeftParen))
+                // Index: arr[expr] - tylko gdy '[' jest przyklejony (brak spacji / tylko nawiasy)
+                if (Check(TokenType.LeftBracket) &&
+                    CountSpacesBetweenTokens(_current - 1, _current) == 0)
                 {
-                    var args = new List<Expression>();
-
-                    if (!Check(TokenType.RightParen))
-                    {
-                        do
-                        {
-                            // ParseAssignment pozwala na np. array[x++] jako argument itd.
-                            args.Add(ParseAssignment());
-                        }
-                        while (Match(TokenType.Comma));
-                    }
-
-                    Consume(TokenType.RightParen, "Expected ')' after call arguments.");
-                    expr = new CallExpression(expr, args, Previous().Position);
-                    continue;
-                }
-
-                // Index: arr[expr]
-                if (Match(TokenType.LeftBracket))
-                {
+                    Advance(); // consume '['
                     var indexExpr = ParseAssignment();
                     Consume(TokenType.RightBracket, "Expected ']' after index expression.");
                     expr = new IndexExpression(expr, indexExpr, Previous().Position);
                     continue;
                 }
 
+                // Call bez nawiasów: foo 1, 2, albo foo(1,2) (nawiasy to whitespace)
+                if (TryParseCallArguments(ref expr))
+                    continue;
+
                 break;
             }
+
+            bool TryParseCallArguments(ref Expression target)
+            {
+                if (IsAtEnd())
+                    return false;
+
+                var nextType = Peek().Type;
+
+                // jesli nastepny token to operator binarny (albo ';' negujace operator), to NIE jest call
+                if (BinaryOperatorTable.ContainsKey(nextType))
+                    return false;
+
+                if (nextType == TokenType.Semicolon &&
+                    _current + 1 < _tokens.Count &&
+                    BinaryOperatorTable.ContainsKey(_tokens[_current + 1].Type))
+                    return false;
+
+                if (!IsArgumentStart(nextType))
+                    return false;
+
+                // '[' bez odstępu po callee to index, nie argument
+                if (Peek().Type == TokenType.LeftBracket &&
+                    CountSpacesBetweenTokens(_current - 1, _current) == 0)
+                    return false;
+
+                var args = new List<Expression>();
+                do
+                {
+                    args.Add(ParseAssignment());
+                } while (Match(TokenType.Comma));
+
+                int callPos = args.Count > 0 ? args[0].Position : target.Position;
+                target = new CallExpression(target, args, callPos);
+                return true;
+            }
+
+            bool IsArgumentStart(TokenType type) =>
+                type == TokenType.Identifier ||
+                type == TokenType.Number ||
+                type == TokenType.String ||
+                type == TokenType.Semicolon ||
+                type == TokenType.LeftBracket;
 
 
             // postfix power UPDATE: **, ****, ******, ...

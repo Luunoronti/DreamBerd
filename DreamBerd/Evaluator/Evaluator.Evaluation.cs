@@ -11,13 +11,23 @@ namespace DreamberdInterpreter
             ["zero"] = 0, ["one"] = 1, ["two"] = 2, ["three"] = 3, ["four"] = 4, ["five"] = 5,
             ["six"] = 6, ["seven"] = 7, ["eight"] = 8, ["nine"] = 9, ["ten"] = 10,
             ["eleven"] = 11, ["twelve"] = 12, ["thirteen"] = 13, ["fourteen"] = 14,
-            ["fifteen"] = 15, ["sixteen"] = 16, ["seventeen"] = 17, ["eighteen"] = 18, ["nineteen"] = 19
+            ["fifteen"] = 15, ["sixteen"] = 16, ["seventeen"] = 17, ["eighteen"] = 18, ["nineteen"] = 19,
+
+            // PL
+            ["jeden"] = 1, ["dwa"] = 2, ["trzy"] = 3, ["cztery"] = 4, ["piec"] = 5,
+            ["szesc"] = 6, ["siedem"] = 7, ["osiem"] = 8, ["dziewiec"] = 9, ["dziesiec"] = 10,
+            ["jedenascie"] = 11, ["dwanascie"] = 12, ["trzynascie"] = 13, ["czternascie"] = 14,
+            ["pietnascie"] = 15, ["szesnascie"] = 16, ["siedemnascie"] = 17, ["osiemnascie"] = 18, ["dziewietnascie"] = 19
         };
 
         private static readonly Dictionary<string, ulong> NumberTens = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
         {
             ["twenty"] = 20, ["thirty"] = 30, ["forty"] = 40, ["fifty"] = 50,
-            ["sixty"] = 60, ["seventy"] = 70, ["eighty"] = 80, ["ninety"] = 90
+            ["sixty"] = 60, ["seventy"] = 70, ["eighty"] = 80, ["ninety"] = 90,
+
+            // PL
+            ["dwadziescia"] = 20, ["trzydziesci"] = 30, ["czterdziesci"] = 40, ["piecdziesiat"] = 50,
+            ["szescdziesiat"] = 60, ["siedemdziesiat"] = 70, ["osiemdziesiat"] = 80, ["dziewiecdziesiat"] = 90
         };
 
         private static readonly Dictionary<string, ulong> NumberScales = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
@@ -27,7 +37,16 @@ namespace DreamberdInterpreter
             ["billion"] = 1_000_000_000,
             ["trillion"] = 1_000_000_000_000,
             ["quadrillion"] = 1_000_000_000_000_000,
-            ["quintillion"] = 1_000_000_000_000_000_000
+            ["quintillion"] = 1_000_000_000_000_000_000,
+
+            // PL
+            ["tysiac"] = 1_000,
+            ["tysiace"] = 1_000,
+            ["milion"] = 1_000_000,
+            ["miliard"] = 1_000_000_000,
+            ["bilion"] = 1_000_000_000_000,
+            ["biliard"] = 1_000_000_000_000_000,
+            ["trylion"] = 1_000_000_000_000_000_000
         };
 
         private static readonly Dictionary<string, string> NumberAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -39,7 +58,8 @@ namespace DreamberdInterpreter
             ["milions"] = "million",
             ["thounsand"] = "thousand",
             ["thounsands"] = "thousand",
-            ["thousandths"] = "thousand"
+            ["thousandths"] = "thousand",
+            ["sto"] = "hundred"
         };
 
         private Value EvaluateExpression(Expression expression)
@@ -793,7 +813,8 @@ case TryAgainStatement tas:
                 }
 
             }
-            throw new InterpreterException($"Invalid function call.");
+            string calleeName = call.Callee is IdentifierExpression id ? id.Name : call.Callee.GetType().Name;
+            throw new InterpreterException($"Invalid function call on '{calleeName}'.", call.Position);
 
             //throw new InterpreterException(
             //    "Only the built-in functions print(...), previous(...), next(...), history(...), " +

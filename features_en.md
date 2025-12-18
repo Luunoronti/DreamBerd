@@ -49,6 +49,7 @@ Legend:
 - ✅ Unary not: `;expr` (true↔false, maybe/undefined pass-through).
 - ✅ Postfix update chains `x++++--!` and power updates `x****!` (DreamBerd-style).
 - ✅ Significant whitespace precedence for binary operators (fewer spaces = higher binding; ties fall back to classic precedence).
+- ✅ Parentheses are ignored / treated as whitespace (calls, conditions, declarations work without them).
 - ✅ Assignment: `x = expr`.
 - ✅ Index assignment: `arr[idx] = expr`.
 - ✅ Update statements `x :+ y!`, `:-`, `:*`, `:/`, `:%`, `:??`, `:<`, `:>`, bitwise `:& :| :^ :<< :>>`, power run `:**!`, root run `:\\!`, etc.
@@ -62,13 +63,13 @@ Legend:
 - ✅ Missing branch → evaluates to `undefined`.
 
 ### Control flow
-- ✅ `if (cond) ... else ... idk ...`
+ - ✅ `if cond ... else ... idk ...` (parentheses optional / ignored)
   - `idk` runs when `cond` is `maybe`.
 - ✅ Blocks `{ ... }` create scope (shadowing works).
 - ✅ `return expr` inside functions.
 
 ### Functions
-- ✅ Declarations: `function|func|fun|fn|functi|f name(args) => { ... }`
+ - ✅ Declarations: `function|func|fun|fn|functi|f name params => { ... }` (params separated by commas; parentheses optional/ignored)
 - ✅ Call stack + function-local variables.
 - ✅ Recursion works.
 
@@ -87,7 +88,7 @@ Legend:
 - ✅ Variable history: `previous(x)`, `next(x)`, `history(x)`.
 
 ### when(...)
-- ✅ `when (condition) { ... }` subscribes to mutations of variables referenced in the condition.
+- ✅ `when condition { ... }` subscribes to mutations of variables referenced in the condition (parentheses optional/ignored).
 - ✅ If the condition references no variables (e.g. `when (true)`), it runs after every mutation (wildcard `*`).
 - ✅ Dispatch uses a queue (prevents recursive re-entry during mutations).
 
@@ -107,7 +108,6 @@ Legend:
 
 - ✅ `while (cond) { ... }` + `break` + `continue` (README says "no loops").
 - ✅ Statement terminators are sometimes optional (e.g. after `if/while` blocks and some statements).
-- ✅ Normal meaning of parentheses `()` (README says parentheses "do nothing").
 
 ---
 
@@ -123,7 +123,6 @@ Legend:
 
 
 ### Syntax / whitespace / parser quirks
-- ❌ “Parentheses do nothing” (parentheses are ignored / treated as whitespace).
 - ❌ Indentation rule: exactly 3 spaces (and -3 spaces).
 - ❌ Extended naming: emoji names, empty names, keyword names, full “number naming”.
 - ❌ Full “editable vs re-assignable” model (mutating structures/objects like `push/pop`).

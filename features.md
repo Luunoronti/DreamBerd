@@ -49,6 +49,7 @@ Legenda:
 - ✅ Unarny not: `;expr` (true↔false, maybe/undefined przechodzi).
 - ✅ Postfixowe łańcuchy `x++++--!` i potęgowanie `x****!` (styl DreamBerd).
 - ✅ Znaczące spacje w operatorach binarnych (mniej spacji = wyższy priorytet; remis → klasyczny precedens).
+- ✅ Nawiasy są ignorowane / traktowane jak whitespace (wywołania, warunki, deklaracje bez nawiasów).
 - ✅ Przypisanie: `x = expr`.
 - ✅ Przypisanie indeksu: `arr[idx] = expr`.
 - ✅ Update statements `x :+ y!`, `:-`, `:*`, `:/`, `:%`, `:??`, `:<`, `:>`, bitowe `:& :| :^ :<< :>>`, potęgi `:**!`, pierwiastki `:\\!` itd.
@@ -62,13 +63,13 @@ Legenda:
 - ✅ Brakująca gałąź → wynik `undefined`.
 
 ### Kontrola przepływu
-- ✅ `if (cond) ... else ... idk ...`
+ - ✅ `if cond ... else ... idk ...` (nawiasy opcjonalne / ignorowane)
   - `idk` odpala się, gdy `cond` jest `maybe`.
 - ✅ Bloki `{ ... }` tworzą scope (shadowing działa).
 - ✅ `return expr` w funkcjach.
 
 ### Funkcje
-- ✅ Deklaracje: `function|func|fun|fn|functi|f name(args) => { ... }`
+ - ✅ Deklaracje: `function|func|fun|fn|functi|f name paramy => { ... }` (paramy oddzielone przecinkami; nawiasy opcjonalne/ignorowane)
 - ✅ Call stack + lokalne zmienne funkcji.
 - ✅ Rekurencja działa.
 
@@ -87,7 +88,7 @@ Legenda:
 - ✅ Historia zmiennych: `previous(x)`, `next(x)`, `history(x)`.
 
 ### when(...)
-- ✅ `when (condition) { ... }` subskrybuje mutacje zmiennych użytych w condition.
+- ✅ `when condition { ... }` subskrybuje mutacje zmiennych użytych w condition (nawiasy opcjonalne/ignorowane).
 - ✅ Gdy condition nie używa zmiennych (np. `when (true)`), odpala się po każdej mutacji (wildcard `*`).
 - ✅ Dispatch przez kolejkę (bez rekurencji przy mutacjach).
 
@@ -107,7 +108,6 @@ Legenda:
 
 - ✅ `while (cond) { ... }` + `break` + `continue` (README mówi „no loops”).
 - ✅ Terminator statementu bywa opcjonalny (np. po `if/while` i po niektórych statementach).
-- ✅ Normalne znaczenie nawiasów `()` (w README nawiasy „nic nie robią”).
 
 ---
 
@@ -123,9 +123,6 @@ Legenda:
 
 ### Składnia / whitespace / parser-quirks
 
-- ❌ Operator „not” jako `;` (np. `if (;false) { ... }`).
-- ❌ „Parentheses do nothing” (nawiasy ignorowane / zamieniane na whitespace).
-- ❌ „Significant whitespace” dla kolejności działań w arytmetyce.
 - ❌ Narzucone indenty: dokładnie 3 spacje (i -3 spacje).
 - ❌ Rozszerzone nazewnictwo: emoji, puste nazwy, nazwy będące keywordami, pełny „number naming”.
 - ❌ Pełny model „editable vs re-assignable” (mutacje struktur/obiektów jak `push/pop`).

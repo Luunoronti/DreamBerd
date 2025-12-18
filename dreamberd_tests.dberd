@@ -324,6 +324,35 @@ assertEq("f :>> 2! (16>>2) => 4", 4, f)!
 print("")!
 
 // --------------------------------------------
+print("== 16) Nawiasy jako whitespace + wywolania bez nawiasow ==")!
+// --------------------------------------------
+function inc x => x + 1!
+assertEq("function inc x => x + 1! ; inc 3 => 4", 4, inc 3)!
+
+function sum a, b => a + b!
+assertEq("function sum a, b => a + b! ; sum 5, 7 => 12", 12, sum 5, 7)!
+
+var var argX = 3!
+function third a, b, c => c!
+var var thirdResult = third 12, argX++ * 4+2, "test"!
+assertEq('third 12, argX++ * 4+2, "test" => "test"', "test", thirdResult)!
+assertEq("argX after third(...) (postfix arg) => 4", 4, argX)!
+
+var var loopX = 0!
+if loopX ==== 0 { loopX = 5! }
+assertEq("if loopX ==== 0 { loopX = 5! } (bez nawiasow) => 5", 5, loopX)!
+
+while loopX < 8 { loopX = loopX + 1! }
+assertEq("while loopX < 8 { loopX = loopX + 1! } (bez nawiasow) => 8", 8, loopX)!
+
+var var whenHitsNoParens = 0!
+when loopX ==== 8 { whenHitsNoParens = whenHitsNoParens + 1! }
+loopX = loopX + 0!
+assertEq("when loopX ==== 8 without () fires once => 1", 1, whenHitsNoParens)!
+
+print("")!
+
+// --------------------------------------------
 print("== Summary ==")!
 print("passed: " + passed)!
 print("failed: " + failed)!
