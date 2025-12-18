@@ -46,8 +46,12 @@ Legend:
 - ✅ Comparisons: `< > <= >=`.
 - ✅ Equality: `==` (very loose / stringy), `===` (loose / numeric), `====` (strict).
 - ✅ Unary minus: `-x`.
+- ✅ Unary not: `;expr` (true↔false, maybe/undefined pass-through).
+- ✅ Postfix update chains `x++++--!` and power updates `x****!` (DreamBerd-style).
+- ✅ Significant whitespace precedence for binary operators (fewer spaces = higher binding; ties fall back to classic precedence).
 - ✅ Assignment: `x = expr`.
 - ✅ Index assignment: `arr[idx] = expr`.
+- ✅ Update statements `x :+ y!`, `:-`, `:*`, `:/`, `:%`, `:??`, `:<`, `:>`, bitwise `:& :| :^ :<< :>>`, power run `:**!`, root run `:\\!`, etc.
 
 ### Conditional operator (4 branches)
 - ✅ `cond ? whenTrue`
@@ -101,10 +105,9 @@ Legend:
 
 ## ✅ Our extensions (NOT in the official DreamBerd README)
 
-- ✅ `while (cond) { ... }` + `break` + `continue` (README says “no loops”).
+- ✅ `while (cond) { ... }` + `break` + `continue` (README says "no loops").
 - ✅ Statement terminators are sometimes optional (e.g. after `if/while` blocks and some statements).
-- ✅ Normal meaning of parentheses `()` (README says parentheses “do nothing”).
-- ✅ Classic operator precedence (README uses significant whitespace to change precedence).
+- ✅ Normal meaning of parentheses `()` (README says parentheses "do nothing").
 
 ---
 
@@ -120,9 +123,7 @@ Legend:
 
 
 ### Syntax / whitespace / parser quirks
-- ❌ “not” operator as `;` (e.g. `if (;false) { ... }`).
 - ❌ “Parentheses do nothing” (parentheses are ignored / treated as whitespace).
-- ❌ Significant whitespace arithmetic (space controls precedence).
 - ❌ Indentation rule: exactly 3 spaces (and -3 spaces).
 - ❌ Extended naming: emoji names, empty names, keyword names, full “number naming”.
 - ❌ Full “editable vs re-assignable” model (mutating structures/objects like `push/pop`).
@@ -132,8 +133,7 @@ Legend:
 
 
 ### Operators / expressions
-- ❌ Operator `=` as “super-loose equality” (README mentions “if you want to be much less precise”).
-- ❌ `++`, `--`, and other shortcuts.
+- ❌ Operator `=` as "super-loose equality" (README mentions "if you want to be much less precise").
 - ❌ `^` (exponentiation) and other extra operators from examples.
 
 ### Strings

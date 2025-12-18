@@ -46,8 +46,12 @@ Legenda:
 - ✅ Porównania: `< > <= >=`.
 - ✅ Równość: `==` (very loose / stringowo), `===` (loose / numerycznie), `====` (strict).
 - ✅ Unarny minus: `-x`.
+- ✅ Unarny not: `;expr` (true↔false, maybe/undefined przechodzi).
+- ✅ Postfixowe łańcuchy `x++++--!` i potęgowanie `x****!` (styl DreamBerd).
+- ✅ Znaczące spacje w operatorach binarnych (mniej spacji = wyższy priorytet; remis → klasyczny precedens).
 - ✅ Przypisanie: `x = expr`.
 - ✅ Przypisanie indeksu: `arr[idx] = expr`.
+- ✅ Update statements `x :+ y!`, `:-`, `:*`, `:/`, `:%`, `:??`, `:<`, `:>`, bitowe `:& :| :^ :<< :>>`, potęgi `:**!`, pierwiastki `:\\!` itd.
 
 ### Operator warunkowy (4 gałęzie)
 - ✅ `cond ? whenTrue`
@@ -104,7 +108,6 @@ Legenda:
 - ✅ `while (cond) { ... }` + `break` + `continue` (README mówi „no loops”).
 - ✅ Terminator statementu bywa opcjonalny (np. po `if/while` i po niektórych statementach).
 - ✅ Normalne znaczenie nawiasów `()` (w README nawiasy „nic nie robią”).
-- ✅ Klasyczne priorytety operatorów (w README priorytet wynika z whitespace).
 
 ---
 
@@ -133,7 +136,6 @@ Legenda:
 
 ### Operatory / wyrażenia
 - ❌ Operator `=` jako „super-luźna równość” (README wspomina „jeśli chcesz być dużo mniej precyzyjny”).
-- ❌ `++`, `--` i inne skróty.
 - ❌ `^` (potęgowanie) i inne dodatkowe operatory z przykładów.
 
 ### Stringi
