@@ -229,12 +229,16 @@ namespace DreamberdInterpreter
                 return false;
 
             string lex = Peek().Lexeme;
-            return lex == "function"
+            if (!(lex == "function"
                 || lex == "func"
                 || lex == "fun"
                 || lex == "fn"
                 || lex == "functi"
-                || lex == "f";
+                || lex == "f"))
+                return false;
+
+            // musi byc nazwa funkcji po keywordzie, inaczej traktujemy to jako zwykly ident (np. 'f :>> 2!')
+            return PeekType(1) == TokenType.Identifier;
         }
 
         private Statement ParseStatement()
@@ -334,6 +338,9 @@ namespace DreamberdInterpreter
                 int pos = Previous().Position;
                 return ParseWhenStatement(pos);
             }
+
+            if (TryParseUpdateStatement(out var updateStmt))
+                return updateStmt;
 
             // domyślnie: wyrażenie jako statement
             Expression expr = ParseExpression();
@@ -577,6 +584,158 @@ namespace DreamberdInterpreter
             }
 
             return new WhenStatement(condition, bodyStmt, position);
+        }
+
+        private bool TryParseUpdateStatement(out Statement stmt)
+        {
+            stmt = null!;
+            int start = _current;
+
+            Expression? target = TryParseUpdateTarget();
+            if (target == null)
+            {
+                _current = start;
+                return false;
+            }
+
+            if (!Match(TokenType.Colon))
+            {
+                _current = start;
+                return false;
+            }
+
+            UpdateOperator? op = null;
+            Expression? rhs = null;
+            int runValue = 0;
+
+            if (Match(TokenType.Plus))
+            {
+                op = UpdateOperator.Add;
+                rhs = ParseExpression();
+            }
+            else if (Match(TokenType.Minus))
+            {
+                op = UpdateOperator.Subtract;
+                rhs = ParseExpression();
+            }
+            else if (Match(TokenType.Star))
+            {
+                op = UpdateOperator.Multiply;
+                rhs = ParseExpression();
+            }
+            else if (Check(TokenType.StarRun))
+            {
+                var tok = Advance();
+                int starCount = tok.Lexeme.Length;
+                if ((starCount & 1) != 0)
+                    Fatal(tok, "Power operator requires an even number of '*' (it's repeated \"**\").");
+
+                runValue = 1 + (starCount / 2);
+                op = UpdateOperator.Power;
+
+                if (!(Check(TokenType.Bang) || Check(TokenType.Question) || Check(TokenType.EndOfFile)))
+                {
+                    rhs = ParseExpression();
+                }
+            }
+            else if (Match(TokenType.Slash))
+            {
+                op = UpdateOperator.Divide;
+                rhs = ParseExpression();
+            }
+            else if (Match(TokenType.Percent))
+            {
+                op = UpdateOperator.Modulo;
+                rhs = ParseExpression();
+            }
+            else if (Check(TokenType.Root))
+            {
+                int rootCount = 0;
+                while (Match(TokenType.Root))
+                    rootCount++;
+
+                runValue = rootCount + 1; // sqrt = 2, cbrt = 3 ...
+                op = UpdateOperator.Root;
+
+                if (!(Check(TokenType.Bang) || Check(TokenType.Question) || Check(TokenType.EndOfFile)))
+                {
+                    rhs = ParseExpression();
+                }
+            }
+            else if (Match(TokenType.Ampersand))
+            {
+                op = UpdateOperator.BitAnd;
+                rhs = ParseExpression();
+            }
+            else if (Match(TokenType.Pipe))
+            {
+                op = UpdateOperator.BitOr;
+                rhs = ParseExpression();
+            }
+            else if (Match(TokenType.Caret))
+            {
+                op = UpdateOperator.BitXor;
+                rhs = ParseExpression();
+            }
+            else if (Match(TokenType.ShiftLeft))
+            {
+                op = UpdateOperator.ShiftLeft;
+                rhs = ParseExpression();
+            }
+            else if (Match(TokenType.ShiftRight))
+            {
+                op = UpdateOperator.ShiftRight;
+                rhs = ParseExpression();
+            }
+            else if (Match(TokenType.QuestionOp))
+            {
+                if (!Match(TokenType.QuestionOp))
+                {
+                    _current = start;
+                    return false;
+                }
+
+                op = UpdateOperator.NullishAssign;
+                rhs = ParseExpression();
+            }
+            else if (Match(TokenType.Less))
+            {
+                op = UpdateOperator.Min;
+                rhs = ParseExpression();
+            }
+            else if (Match(TokenType.Greater))
+            {
+                op = UpdateOperator.Max;
+                rhs = ParseExpression();
+            }
+            else
+            {
+                _current = start;
+                return false;
+            }
+
+            bool isDebug = ParseTerminatorIsDebug();
+            stmt = new UpdateStatement(target, op.Value, rhs, runValue, isDebug, target.Position);
+            return true;
+        }
+
+        private Expression? TryParseUpdateTarget()
+        {
+            if (!Check(TokenType.Identifier))
+                return null;
+
+            Advance();
+            var idTok = Previous();
+            Expression expr = new IdentifierExpression(idTok.Lexeme, idTok.Position);
+
+            while (Match(TokenType.LeftBracket))
+            {
+                var indexExpr = ParseExpression();
+                Consume(TokenType.RightBracket, "Expected ']' after index expression.");
+                expr = new IndexExpression(expr, indexExpr, expr.Position);
+            }
+
+            return expr;
         }
 
         private Statement ParseIfStatement(int position)

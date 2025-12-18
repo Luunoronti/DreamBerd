@@ -203,6 +203,9 @@ namespace DreamberdInterpreter
                         return Value.Null;
                     }
 
+                case UpdateStatement us:
+                    return EvaluateUpdate(us);
+
                 
 case IfStatement ifs:
     {
@@ -512,6 +515,237 @@ case TryAgainStatement tas:
             }
 
             return newValue;
+        }
+
+        private Value EvaluateUpdate(UpdateStatement us)
+        {
+            Value current = ResolveAssignable(us.Target, us.Position, out var assign, out var mutatedName);
+
+            Value newValue;
+
+            switch (us.Operator)
+            {
+                case UpdateOperator.Add:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':+' update.", us.Position));
+                        newValue = Value.FromNumber(ToNumberAt(current, us.Target.Position) + ToNumberAt(rhs, us.ValueExpression!.Position));
+                        break;
+                    }
+                case UpdateOperator.Subtract:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':-' update.", us.Position));
+                        newValue = Value.FromNumber(ToNumberAt(current, us.Target.Position) - ToNumberAt(rhs, us.ValueExpression!.Position));
+                        break;
+                    }
+                case UpdateOperator.Multiply:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':*' update.", us.Position));
+                        newValue = Value.FromNumber(ToNumberAt(current, us.Target.Position) * ToNumberAt(rhs, us.ValueExpression!.Position));
+                        break;
+                    }
+                case UpdateOperator.Divide:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':/'.", us.Position));
+                        double divisor = ToNumberAt(rhs, us.ValueExpression!.Position);
+                        if (Math.Abs(divisor) < double.Epsilon)
+                            newValue = Value.Undefined;
+                        else
+                            newValue = Value.FromNumber(ToNumberAt(current, us.Target.Position) / divisor);
+                        break;
+                    }
+                case UpdateOperator.Modulo:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':%'.", us.Position));
+                        double divisor = ToNumberAt(rhs, us.ValueExpression!.Position);
+                        if (Math.Abs(divisor) < double.Epsilon)
+                            newValue = Value.Undefined;
+                        else
+                            newValue = Value.FromNumber(ToNumberAt(current, us.Target.Position) % divisor);
+                        break;
+                    }
+                case UpdateOperator.Power:
+                    {
+                        double exponent = us.ValueExpression != null
+                            ? ToNumberAt(EvaluateExpression(us.ValueExpression), us.ValueExpression.Position)
+                            : us.RunValue;
+                        newValue = Value.FromNumber(Math.Pow(ToNumberAt(current, us.Target.Position), exponent));
+                        break;
+                    }
+                case UpdateOperator.Root:
+                    {
+                        double degree = us.ValueExpression != null
+                            ? ToNumberAt(EvaluateExpression(us.ValueExpression), us.ValueExpression.Position)
+                            : us.RunValue;
+
+                        if (Math.Abs(degree) < double.Epsilon)
+                        {
+                            newValue = Value.Undefined;
+                        }
+                        else
+                        {
+                            newValue = Value.FromNumber(Math.Pow(ToNumberAt(current, us.Target.Position), 1.0 / degree));
+                        }
+                        break;
+                    }
+                case UpdateOperator.BitAnd:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':&'.", us.Position));
+                        long l = ToInt64At(current, us.Target.Position);
+                        long r = ToInt64At(rhs, us.ValueExpression!.Position);
+                        newValue = Value.FromNumber(l & r);
+                        break;
+                    }
+                case UpdateOperator.BitOr:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':|'.", us.Position));
+                        long l = ToInt64At(current, us.Target.Position);
+                        long r = ToInt64At(rhs, us.ValueExpression!.Position);
+                        newValue = Value.FromNumber(l | r);
+                        break;
+                    }
+                case UpdateOperator.BitXor:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':^'.", us.Position));
+                        long l = ToInt64At(current, us.Target.Position);
+                        long r = ToInt64At(rhs, us.ValueExpression!.Position);
+                        newValue = Value.FromNumber(l ^ r);
+                        break;
+                    }
+                case UpdateOperator.ShiftLeft:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':<<'.", us.Position));
+                        long l = ToInt64At(current, us.Target.Position);
+                        int shift = (int)ToInt64At(rhs, us.ValueExpression!.Position);
+                        newValue = Value.FromNumber(l << shift);
+                        break;
+                    }
+                case UpdateOperator.ShiftRight:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':>>'.", us.Position));
+                        long l = ToInt64At(current, us.Target.Position);
+                        int shift = (int)ToInt64At(rhs, us.ValueExpression!.Position);
+                        newValue = Value.FromNumber(l >> shift);
+                        break;
+                    }
+                case UpdateOperator.NullishAssign:
+                    {
+                        if (current.Kind != ValueKind.Undefined)
+                            return current;
+
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':??'.", us.Position));
+                        newValue = rhs;
+                        break;
+                    }
+                case UpdateOperator.Min:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':<'.", us.Position));
+                        double leftNum = ToNumberAt(current, us.Target.Position);
+                        double rightNum = ToNumberAt(rhs, us.ValueExpression!.Position);
+                        newValue = Value.FromNumber(Math.Min(leftNum, rightNum));
+                        break;
+                    }
+                case UpdateOperator.Max:
+                    {
+                        var rhs = EvaluateExpression(us.ValueExpression ?? throw new InterpreterException("Missing right-hand side for ':>'.", us.Position));
+                        double leftNum = ToNumberAt(current, us.Target.Position);
+                        double rightNum = ToNumberAt(rhs, us.ValueExpression!.Position);
+                        newValue = Value.FromNumber(Math.Max(leftNum, rightNum));
+                        break;
+                    }
+                default:
+                    throw new InterpreterException($"Unsupported update operator {us.Operator}.", us.Position);
+            }
+
+            assign(newValue);
+            if (us.IsDebug)
+            {
+                DebugPrint(us.Target, newValue);
+            }
+
+            if (mutatedName != null)
+                OnVariableMutated(mutatedName);
+
+            return newValue;
+        }
+
+        private Value ResolveAssignable(Expression target, int position, out Action<Value> assign, out string? mutatedName)
+        {
+            mutatedName = null;
+
+            if (target is IdentifierExpression ident)
+            {
+                if (_constStore.TryGet(ident.Name, out _))
+                    throw new InterpreterException($"Cannot assign to const const const variable '{ident.Name}'.", position);
+
+                // funkcja lokalna
+                if (_callStack.Count > 0)
+                {
+                    var frame = _callStack.Peek();
+                    if (frame.Locals.ContainsKey(ident.Name))
+                    {
+                        var currentLocal = frame.Locals[ident.Name];
+                        assign = v =>
+                        {
+                            frame.Locals[ident.Name] = v;
+                        };
+                        mutatedName = ident.Name;
+                        return currentLocal;
+                    }
+                }
+
+                if (!_variables.TryGet(ident.Name, out var value))
+                    throw new InterpreterException($"Variable '{ident.Name}' is not defined.", position);
+
+                assign = v => _variables.Assign(ident.Name, v, _currentStatementIndex);
+                mutatedName = ident.Name;
+                return value;
+            }
+
+            if (target is IndexExpression idx)
+            {
+                Value container = EvaluateExpression(idx.Target);
+                if (container.Kind != ValueKind.Array || container.Array == null)
+                    throw new InterpreterException("Index update is only supported on arrays.", position);
+
+                Value indexVal = EvaluateExpression(idx.Index);
+                double index = ToNumberAt(indexVal, idx.Index.Position);
+
+                var dict = new Dictionary<double, Value>(container.Array);
+                mutatedName = (idx.Target is IdentifierExpression idt) ? idt.Name : null;
+
+                assign = v =>
+                {
+                    dict[index] = v;
+
+                    if (idx.Target is IdentifierExpression arrIdent &&
+                        !_constStore.TryGet(arrIdent.Name, out _))
+                    {
+                        Value newArray = Value.FromArray(dict);
+
+                        if (_callStack.Count > 0)
+                        {
+                            var frame = _callStack.Peek();
+                            if (frame.Locals.ContainsKey(arrIdent.Name))
+                            {
+                                frame.Locals[arrIdent.Name] = newArray;
+                                return;
+                            }
+                        }
+
+                        _variables.Assign(arrIdent.Name, newArray, _currentStatementIndex);
+                    }
+                };
+
+                return dict.TryGetValue(index, out var currentElement) ? currentElement : Value.Undefined;
+            }
+
+            throw new InterpreterException("Update target must be a variable or array element.", position);
+        }
+
+        private long ToInt64At(Value value, int position)
+        {
+            double number = ToNumberAt(value, position);
+            return (long)number;
         }
 
         private Value EvaluateCall(CallExpression call)

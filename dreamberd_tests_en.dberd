@@ -257,7 +257,69 @@ print("== 14) Significant whitespace in arithmetic ==")!
 // --------------------------------------------
 assertEq("fewer spaces => higher precedence", 24, 10-2  *3)!
 assertEq("more spaces around '-' lets * bind first", 4, 10 - 2* 3)!
-assertEq("double spaces delay that operator", 9, 1+2  +3*2)!
+assertEq("1+2  +3*2 => 9 (double spaces delay)", 9, 1+2  +3*2)!
+
+print("")!
+
+// --------------------------------------------
+print("== 15) Update statements (:+, :-, :*, :/, :%, :**!, :\\\\!, bitwise, :??) ==")!
+// --------------------------------------------
+var var u = 5!
+u :+ 3!
+assertEq("u :+ 3! (5+3) => 8", 8, u)!
+u :- 2!
+assertEq("u :- 2! (8-2) => 6", 6, u)!
+u :* 2!
+assertEq("u :* 2! (6*2) => 12", 12, u)!
+u :/ 3!
+assertEq("u :/ 3! (12/3) => 4", 4, u)!
+
+var var m = 10!
+m :% 6!
+assertEq("m :% 6! (10%6) => 4", 4, m)!
+
+var var powU = 2!
+powU :**!
+assertEq("powU :**! (square) => 4", 4, powU)!
+var var powU2 = 2!
+powU2 :****!
+assertEq("powU2 :****! (cube-ish) => 8", 8, powU2)!
+
+var var rootU = 16!
+rootU :\\!
+assertEq("rootU :\\\\! (sqrt) => 4", 4, rootU)!
+var var rootU2 = 27!
+rootU2 :\\\\!
+assertEq("rootU2 :\\\\\\\\! (cbrt) => 3", 3, rootU2)!
+
+var var nullish = undefined!
+nullish :?? 42!
+assertEq("nullish :?? 42! (undefined -> 42)", 42, nullish)!
+var var nullish2 = 5!
+nullish2 :?? 99!
+assertEq("nullish2 :?? 99! (already 5) => 5", 5, nullish2)!
+
+var var mm = 10!
+mm :< 3!
+assertEq("mm :< 3! (min) => 3", 3, mm)!
+mm :> 20!
+assertEq("mm :> 20! (max) => 20", 20, mm)!
+
+var var b = 6!
+b :& 3!
+assertEq("b :& 3! (6&3) => 2", 2, b)!
+var var c = 1!
+c :| 4!
+assertEq("c :| 4! (1|4) => 5", 5, c)!
+var var d = 7!
+d :^ 3!
+assertEq("d :^ 3! (7^3) => 4", 4, d)!
+var var e = 1!
+e :<< 3!
+assertEq("e :<< 3! (1<<3) => 8", 8, e)!
+var var f = 16!
+f :>> 2!
+assertEq("f :>> 2! (16>>2) => 4", 4, f)!
 
 print("")!
 

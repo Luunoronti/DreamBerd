@@ -36,6 +36,25 @@ namespace DreamberdInterpreter
         ConstConstConst
     }
 
+    public enum UpdateOperator
+    {
+        Add,
+        Subtract,
+        Multiply,
+        Divide,
+        Modulo,
+        Power,          // exponent from RHS lub z licznika gwiazdek
+        Root,           // degree z RHS lub licznika '\\'
+        BitAnd,
+        BitOr,
+        BitXor,
+        ShiftLeft,
+        ShiftRight,
+        NullishAssign,
+        Min,
+        Max
+    }
+
     /// <summary>
     /// Bazowy typ wszystkich nodów AST, z pozycją (0-based) w źródle.
     /// </summary>
@@ -247,6 +266,44 @@ namespace DreamberdInterpreter
         public TryAgainStatement(int position)
             : base(position)
         {
+        }
+    }
+
+    public sealed class UpdateStatement : Statement
+    {
+        public Expression Target
+        {
+            get;
+        }
+
+        public UpdateOperator Operator
+        {
+            get;
+        }
+
+        public Expression? ValueExpression
+        {
+            get;
+        }
+
+        public int RunValue
+        {
+            get;
+        }
+
+        public bool IsDebug
+        {
+            get;
+        }
+
+        public UpdateStatement(Expression target, UpdateOperator op, Expression? valueExpression, int runValue, bool isDebug, int position)
+            : base(position)
+        {
+            Target = target ?? throw new ArgumentNullException(nameof(target));
+            Operator = op;
+            ValueExpression = valueExpression;
+            RunValue = runValue;
+            IsDebug = isDebug;
         }
     }
 

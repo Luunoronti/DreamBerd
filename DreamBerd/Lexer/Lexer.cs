@@ -153,6 +153,18 @@ namespace DreamberdInterpreter
                 case ':':
                     AddToken(TokenType.Colon);
                     break;
+                case '%':
+                    AddToken(TokenType.Percent);
+                    break;
+                case '&':
+                    AddToken(TokenType.Ampersand);
+                    break;
+                case '|':
+                    AddToken(TokenType.Pipe);
+                    break;
+                case '^':
+                    AddToken(TokenType.Caret);
+                    break;
                 case '!':
                     AddToken(TokenType.Bang);
                     break;
@@ -201,12 +213,16 @@ case '\\':
 case '<':
                     if (Match('='))
                         AddToken(TokenType.LessEqual);
+                    else if (Match('<'))
+                        AddToken(TokenType.ShiftLeft);
                     else
                         AddToken(TokenType.Less);
                     break;
                 case '>':
                     if (Match('='))
                         AddToken(TokenType.GreaterEqual);
+                    else if (Match('>'))
+                        AddToken(TokenType.ShiftRight);
                     else
                         AddToken(TokenType.Greater);
                     break;

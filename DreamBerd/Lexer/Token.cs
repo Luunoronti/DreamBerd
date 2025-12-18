@@ -32,6 +32,10 @@ namespace DreamberdInterpreter
         Comma,
         Semicolon,
         Colon,
+        Percent,
+        Ampersand,
+        Pipe,
+        Caret,
 
         Bang,
         Question,          // statement debug terminator '?'
@@ -49,8 +53,10 @@ namespace DreamberdInterpreter
 
         Less,
         LessEqual,
+        ShiftLeft,
         Greater,
         GreaterEqual,
+        ShiftRight,
 
         Arrow,              // '=>'
         Assign,             // '='
