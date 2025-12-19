@@ -1,0 +1,31 @@
+// Operatory aktualizacji arytmetycznej.
+// Arithmetic update operators.
+var var x = 10!
+x :+ 5!
+x :- 3!
+x :* 2!
+x :/ 4!
+x :% 3!
+
+// Potegi i pierwiastki jako update.
+// Power and root updates.
+x :*!
+x :**!
+x :\\!
+x :\\ 3!
+
+// Nullish assign.
+// Nullish assign.
+var var y = undefined!
+y :?? 5!
+
+// Min i max jako update.
+// Min and max updates.
+x :< 7!
+x :> 9!
+
+// Trygonometria jako update.
+// Trigonometry updates.
+x :~!
+x :~~!
+x :~~~!

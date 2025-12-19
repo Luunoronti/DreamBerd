@@ -1,0 +1,39 @@
+// If, else, idk.
+// If, else, idk.
+var var mood = maybe!
+if mood {
+  print "maybe"!
+} else {
+  print "nope"!
+} idk {
+  print "unknown"!
+}
+
+// While i sterowanie petla.
+// While and loop control.
+var var i = 0!
+while i < 5 {
+  i :+ 1!
+  if i == 2 { continue! }
+  if i == 4 { break! }
+}
+
+// Try again w if.
+// Try again inside if.
+var var tries = 0!
+if tries < 2 {
+  tries :+ 1!
+  try again!
+} else {
+  print "done"!
+}
+
+// When i pattern when.
+// When and pattern when.
+when i {
+  print "i changed"!
+}
+var var point = {x: 3, y: 4}!
+when point matches {x, y} where x > 0 {
+  print x!
+}

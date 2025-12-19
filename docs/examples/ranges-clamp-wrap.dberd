@@ -1,0 +1,24 @@
+// Przedzialy domkniete i otwarte.
+// Closed and open ranges.
+var var r1 = [0 .. 10]!
+var var r2 = [0 .. 10)!
+var var r3 = (0 .. 10]!
+var var r4 = (0 .. 10)!
+
+// Clamp i wrap jako operatory infiksowe.
+// Clamp and wrap as infix operators.
+var var value = 15!
+var var clamped = value ? [0 .. 10]!
+var var wrapped = value ? [0 .. 10)!
+
+// Wersje slowne clamp i wrap.
+// Wordy clamp and wrap forms.
+var var clampedWord = value clamp [0 .. 10]!
+var var wrappedWord = value wrap [0 .. 10)!
+
+// Aktualizacja clamp i wrap.
+// Clamp and wrap updates.
+value :? [0 .. 10]!
+value :? clamp [0 .. 10]!
+value :? 15 @ [0 .. 10)!
+value :? wrap [0 .. 10)!

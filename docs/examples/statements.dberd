@@ -1,0 +1,24 @@
+// Instrukcja wyrazeniowa i debug.
+// Expression statement and debug.
+1 + 2!
+1 + 2?
+
+// Deklaracje zmiennych.
+// Variable declarations.
+var var x = 1!
+const const y = 2!
+const const const z = 3!
+
+// Destrukturyzacja tablicy.
+// Array destructuring.
+var var [a, b=5, ...rest] = [1, 2, 3, 4]!
+
+// Destrukturyzacja obiektu.
+// Object destructuring.
+var var {foo, bar: alias, missing=99} = {foo: 1, bar: 2}!
+
+// Bloki i zasieg.
+// Blocks and scope.
+{
+  var var scoped = 10!
+}

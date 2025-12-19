@@ -1,0 +1,13 @@
+// Destrukturyzacja tablicy i obiektu.
+// Array and object destructuring.
+var var [a, b=5, ...rest] = [1, 2, 3, 4]!
+var var {x, y: alias, missing=99} = {x: 1, y: 2}!
+
+// Ignorowanie przez _.
+// Ignoring with _.
+var var [_, second] = [10, 20]!
+
+// When z pattern matching i guardem.
+// When with pattern matching and guard.
+var var point = {x: 3, y: 4}!
+when point matches {x, y} where x > 0 { print x! }

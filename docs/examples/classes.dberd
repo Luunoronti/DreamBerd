@@ -1,0 +1,16 @@
+// Klasa i wlasnosci.
+// Class and properties.
+MyClass is a class {
+  prop : default 123!
+  static staticProp : default 5!
+  function add x => source["prop"] + x!
+  static function make x => x!
+  fallback : default "missing"!
+  static fallback : default "static missing"!
+}
+
+// Dostep do pol i metod.
+// Access to fields and methods.
+var var obj = MyClass!
+print obj["add"] 7!
+print MyClass["staticProp"]!

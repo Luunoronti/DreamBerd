@@ -1,0 +1,11 @@
+// Delete na zmiennej.
+// Delete on a variable.
+var var temp = 123!
+delete temp!
+
+// Delete na tablicy i obiekcie.
+// Delete on an array and object.
+var var arr = [1, 2, 3]!
+delete arr[0]!
+var var obj = {a: 1, b: 2}!
+delete obj["a"]!

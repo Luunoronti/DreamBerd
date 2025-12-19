@@ -1,0 +1,32 @@
+// Liczby i zapisy slowne.
+// Numbers and word-based numerals.
+var var intVal = 123!
+var var floatVal = -4.2!
+var var wordVal = one hundred!
+var var polishWordVal = dwa tysiace trzy!
+
+// Stringi i puste nazwy.
+// Strings and empty names.
+var var text = "tekst"!
+var var "" = "pusty identyfikator"!
+
+// Boolean, null i undefined.
+// Booleans, null, and undefined.
+var var truthy = true!
+var var mystery = maybe!
+var var nothing = null!
+var var missing = undefined!
+
+// Tablice i indeksowanie od -1.
+// Arrays and indexing from -1.
+var var arr = [10, 20, 30]!
+print arr[-1]!
+print arr[0]!
+print arr[1]!
+
+// Przedzialy z roznymi koncami.
+// Ranges with different end types.
+var var closed = [0 .. 10]!
+var var halfOpen = [0 .. 10)!
+var var openRight = (0 .. 10]!
+var var open = (0 .. 10)!

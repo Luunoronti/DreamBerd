@@ -1,0 +1,26 @@
+// Deklaracja funkcji.
+// Function declaration.
+function add a, b => a + b!
+
+// Funkcja z blokiem.
+// Function with block body.
+function greet name => {
+  print "Hi " + name!
+}
+
+// Wywolanie bez nawiasow.
+// Call without parentheses.
+var var total = add 1, 2!
+greet "Ada"!
+
+// Return.
+// Return.
+function pick flag => {
+  if flag { return 1! } else { return 2! }
+}
+
+// Wbudowane.
+// Built-ins.
+var var prev = previous total!
+var var hist = history total!
+var var nextVal = next total!

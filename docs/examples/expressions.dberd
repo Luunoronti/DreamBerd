@@ -1,0 +1,35 @@
+// Arytmetyka i porownania.
+// Arithmetic and comparisons.
+var var sum = 1 + 2!
+var var cmp = 3 <= 4!
+
+// Rownosc.
+// Equality.
+var var loose = 1 == "1"!
+var var strict = 1 ==== 1!
+
+// Min i max.
+// Min and max.
+var var minVal = 3 <> 5!
+var var maxVal = 3 >< 5!
+
+// Unarne operatory.
+// Unary operators.
+var var neg = -5!
+var var notVal = ;false!
+var var absVal = ||-12!
+var var sinVal = ~0!
+var var cosVal = ~~0!
+var var tanVal = ~~~0!
+
+// Potegi i pierwiastki.
+// Powers and roots.
+var var square = 3**!
+var var cube = 2****!
+var var sqrtVal = \\9!
+var var cbrtVal = \\\\27!
+var var nthRoot = 27 \\ 3!
+
+// Warunkowy czterogaleziowy.
+// Four-branch conditional.
+var var pick = maybe ? 1 : 2 : 3 : 4!
