@@ -29,9 +29,9 @@ These files are our source of truth for what is implemented, what differs from t
 
 ## Spec compatibility
 
-**Estimated: ~79%** compatibility with the upstream README/spec (user-facing behavior), based on the checklist in `features_en.md` (65 implemented, 7 partial counted as 0.5, 15 missing).
+**Estimated: ~52%** compatibility with the language/runtime parts of `Spec.md`, based on the checklist in `features_en.md` (14 implemented, 7 partial counted as 0.5, 13 missing across 34 counted items; marketing-only sections are excluded from the percentage).
 
-This is a *human estimate*, not an automated measurement. Some spec items are pure meme/gag features (AQMI/AI, whitespace-math, "parentheses do nothing", etc.) that we don't have yet, while we already implement a bunch of practical core pieces (parser, if/else/idk, functions, arrays, lifetimes, when(), history(), stdlib).  
+This is a *human estimate*, not an automated measurement. Some spec items are pure meme/gag features (AQMI/AI, DBX rich text, async/await/next, etc.) that we don't have yet, while we already implement the core pieces (parser, if/else/idk, functions, arrays, lifetimes, when(), history(), stdlib).  
 For the detailed breakdown see: [features.md](./features.md) / [features_en.md](./features_en.md).
 
 ---

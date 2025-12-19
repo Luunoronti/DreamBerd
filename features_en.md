@@ -1,188 +1,69 @@
-# DreamBerd (C# interpreter) — feature list: implemented vs missing
+# DreamBerd (C# interpreter) — spec compliance checklist
 
-This file compares the **current state of our C# interpreter** against the “canonical” DreamBerd specification / README (the GitHub repo sometimes called “Gulf of Mexico”).
-
-- **Project state (this repo ZIP):** DreamBerd interpreter in C# (.NET), console runner + REPL.
-- **Goal:** a quick checklist of “what we have” and “what still doesn’t exist” so we don’t lose direction.
+This file compares our C# interpreter with the upstream DreamBerd/GulfOfMexico specification in `Spec.md`.
 
 Legend:
-- ✅ = implemented
-- 🟡 = partial / different from the spec
-- ❌ = missing
-- Progress snapshot (weighted: partial = 0.5): 65 ✅, 7 �, 15 ❌ -> ~79% coverage.
+- [x] implemented
+- [~] partial / different from the spec
+- [ ] missing
 
----
+Progress snapshot (partial = 0.5):
+- Counted items: 34 language/runtime sections from `Spec.md` (excluded marketing/orga sections: Installation, Copilot, Ownership, Contributing, Compiling, Highlighting, Vision Pro, Edutainment, Examples).
+- Totals: 14 [x], 7 [~], 13 [ ] → ~52% coverage.
 
-## ✅ What we already have (matches the README, or very close)
+## Spec items (counted)
 
-### Running
-- ✅ **File mode:** `DreamberdInterpreter.exe <path>` → run a file.
-- ✅ **REPL mode:** no args → reads until an empty line, executes, repeats.
+| Spec.md section | Status | Notes |
+| --- | --- | --- |
+| Exclamation Marks! | [x] | `!`/`?` terminators work; multiple marks; `;` acts as logical not. |
+| Declarations | [~] | `const const/var` and `var const/var` implemented incl. `const const const`; “editable vs re-assignable” is simplified (no object mutation rules). |
+| Immutable Data | [x] | `const const const` is immutable; scope is per interpreter run (not global to all users). |
+| Naming | [x] | Any Unicode/emoji/digit/keyword names; numeric tokens can resolve to identifiers; empty-string names allowed. |
+| Arrays | [x] | Literals, start index -1, float indexes, missing index ⇒ `undefined`, `numArray` helper. |
+| When | [x] | `when` subscribes to referenced vars; parens optional; wildcard when no deps. |
+| Lifetimes | [x] | `<N>/<Ns>/<Infinity>` and negatives for hoisting; expiry falls back to older overload. |
+| Loops | [~] | Spec says “no loops”; interpreter has `while` with `break`/`continue`. |
+| Booleans | [x] | `true`/`false`/`maybe` implemented. |
+| Arithmetic | [x] | Significant whitespace precedence; `+ - * /`, unary; number words EN/PL (limited, no hyphenated/fraction words); division by zero → `undefined`. |
+| Indents | [ ] | No enforcement of 3-space indent rule. |
+| Equality | [x] | `==`, `===`, `====`, plus super-loose `=` implemented. |
+| Functions | [x] | Any prefix of “function”; optional parens; returns/recursion work. |
+| Dividing by Zero | [x] | `/0` yields `undefined`. |
+| Strings | [~] | Any number of quotes, asymmetry allowed; zero-quote treated as identifier if it exists (spec says always string). |
+| String Interpolation | [~] | Basic `{name}` / `$name`; no regional currency/typography variants. |
+| Types | [ ] | Type annotations/aliases not supported. |
+| Regular Expressions | [ ] | No `RegExp` narrowing. |
+| Previous | [~] | `previous/next/current` keywords + `history`; missing `await next`. |
+| File Structure | [ ] | No `=====` multi-file blocks. |
+| Exporting | [ ] | No `export ... to` / `import ...!`. |
+| Classes | [ ] | No classes/singletons/field history. |
+| Time | [ ] | No `Date.now()` or time mutation. |
+| Delete | [~] | Can delete primitive values; cannot delete keywords/classes. |
+| Overloading | [~] | Overloads pick highest `!` then newest; lifetime fallback; inverted `¡` not supported. |
+| Semantic naming | [x] | Prefix styles (sName/iAge/bHappy) are allowed; no extra semantics required. |
+| Reversing | [x] | `reverse!` implemented (local execution direction toggle). |
+| Class Names | [ ] | No `className` alias (classes absent). |
+| DBX | [ ] | No HTML/DBX embedding. |
+| Rich text | [ ] | No rich-text strings/links. |
+| Asynchronous Functions | [ ] | No `async`/`await`/`noop` line interleaving. |
+| Signals | [ ] | No `use()` signals or destructuring getters/setters. |
+| AI | [ ] | No AEMI/ABI/AQMI insertion helpers. |
+| Parentheses | [x] | Parentheses mostly ignored/treated as whitespace for grouping/calls. |
 
-### Lexer + parser
-- ✅ Tokenization of the basic syntax (identifiers, numbers, strings, operators, blocks).
-- ✅ AST parser for statements + expressions.
-- ✅ Errors with `line:column` + a caret pointing at the spot.
+## Extras we support outside the spec
 
-### Statement terminators
-- ✅ `!` as a statement terminator.
-- ✅ `?` as a debug terminator (prints expression value; for identifiers also prints `history(...)`).
-- ✅ Any number of `!`/`?` (e.g. `!!!`) is accepted.
-- ✅ The number of `!` is used as **declaration priority** (overloading).
+- `while`/`break`/`continue`; some statement terminators are optional after blocks.
+- `printsl` plus stdlib helpers (`readFile`, `readLines`, `trim`, `split`, `lines`, `charAt`, `slice`, `toNumber`/`parseInt`).
+- Number-word literals in EN/PL; extra unary/operators (abs `||x`, trig `~x`/`~~x`, clamp/wrap + update variants, power/root run operators).
+- Variable history helpers (`history(x)`), lifetime-based overload fallback, and broadly optional parentheses.
 
-### Declarations (mutability)
-- ✅ `const const`, `const var`, `var const`, `var var`.
-- ✅ `const const const` as a global immutable store (cannot be reassigned or overwritten).
-- 🟡 The “editable vs re-assignable” model is simplified (no objects/methods like `push/pop`).
+## Spec sections not counted in the percentage
 
-### Types & literals
-- ✅ Numbers (double).
-- ✅ Strings using `"..."` and `'...'`.
-- ✅ 3-state booleans: `true`, `false`, `maybe`.
-- ✅ `undefined`.
-- 🟡 `null` exists as a runtime value (e.g. statement results), but there is no dedicated `null` literal in the parser yet.
-
-### Expressions & operators
-- ✅ Arithmetic: `+ - * /` (division by 0 → `undefined`).
-- ✅ Comparisons: `< > <= >=`.
-- ✅ Equality: `==` (very loose / stringy), `===` (loose / numeric), `====` (strict).
-- ✅ Operator `=` as "super-loose equality" (README mentions "if you want to be much less precise").
-- ✅ Unary minus: `-x`.
-- ✅ Unary not: `;expr` (true↔false, maybe/undefined pass-through).
-- ✅ Postfix update chains `x++++--!` and power updates `x****!` (DreamBerd-style).
-- ✅ Significant whitespace precedence for binary operators (fewer spaces = higher binding; ties fall back to classic precedence).
-- ✅ Parentheses are ignored / treated as whitespace (calls, conditions, declarations work without them).
-- ✅ Assignment: `x = expr`.
-- ✅ Index assignment: `arr[idx] = expr`.
-- ✅ Update statements `x :+ y!`, `:-`, `:*`, `:/`, `:%`, `:??`, `:<`, `:>`, bitwise `:& :| :^ :<< :>>`, power run `:**!`, root run `:\\!`, etc.
-- ✅ Extra operators: abs `||x`; trig `~x`/`~~x`/`~~~x`; min/max aliases `<>` `><` `⌊⌋` `⌈⌉`; clamp/wrap `▷`/`↻` and keywords `clamp`/`wrap` with square-bracket ranges `[lo .. hi]`/`]lo .. hi[`, plus `:▷` / `:↻` updates (wrap supports an optional delta before `@`).
-
-### Conditional operator (4 branches)
-- ✅ `cond ? whenTrue`
-- ✅ Optional branches (can appear in any order, and can be omitted):
-  - `: whenFalse`
-  - `:: whenMaybe`
-  - `::: whenUndefined`
-- ✅ Missing branch → evaluates to `undefined`.
-
-### Control flow
- - ✅ `if cond ... else ... idk ...` (parentheses optional / ignored)
-  - `idk` runs when `cond` is `maybe`.
-- ✅ Blocks `{ ... }` create scope (shadowing works).
-- ✅ `return expr` inside functions.
-
-### Functions
- - ✅ Declarations: `function|func|fun|fn|functi|f name params => { ... }` (params separated by commas; parentheses optional/ignored)
-- ✅ Call stack + function-local variables.
-- ✅ Recursion works.
-
-### Arrays
-- ✅ Literals: `[a, b, c]`.
-- ✅ Indices start at `-1`.
-- ✅ Indices can be floats (`double`).
-- ✅ Missing index read → `undefined`.
-- ✅ `numArray(init, size)` creates a numeric array (indices from -1).
-
-### Lifetimes + declaration overloading
-- ✅ Lifetimes: `<N>` (lines), `<N s>` (seconds), `<Infinity>`.
-- ✅ Overloading: multiple declarations of the same name within a scope:
-  - active decl = highest priority (# of `!`), then newest
-  - lifetime expiry can cause fallback to an older declaration
-- ✅ Variable history: `previous(x)`, `next(x)`, `history(x)`.
-- ✅ Keyword forms: `previous x`, `next x`, `current x` (no parentheses).
-
-### when(...)
-- ✅ `when condition { ... }` subscribes to mutations of variables referenced in the condition (parentheses optional/ignored).
-- ✅ If the condition references no variables (e.g. `when (true)`), it runs after every mutation (wildcard `*`).
-- ✅ Dispatch uses a queue (prevents recursive re-entry during mutations).
-
-### delete
-- ✅ `delete <primitive>` works for number/string/boolean (as per README).
-  - after deletion: using that exact value throws an error.
-
-### Mini stdlib
-- ✅ `print(...)`
-- ✅ IO: `readFile(path)`, `readLines(path)`
-- ✅ Strings: `lines(text)`, `trim(text)`, `split(text, sep)`, `charAt(text, idx)`, `slice(text, start)`
-- ✅ Conversions: `toNumber(x)` (+ aliases `parseInt`, `parseNumber`)
-
----
-
-## ✅ Our extensions (NOT in the official DreamBerd README)
-
-- ✅ `while (cond) { ... }` + `break` + `continue` (README says "no loops").
-- ✅ Statement terminators are sometimes optional (e.g. after `if/while` blocks and some statements).
-
----
-
-## 🟡 Implemented, but different / incomplete (vs README)
-
-- 🟡 `const var` / `var var` “editable” semantics are not implemented (no objects, no methods like `push/pop`).
-- ✅ Naming: Unicode/emoji identifiers, keywords as names, digit-only names; empty names via `""` also work. A numeric token in an expression first tries to resolve a variable/function of that name, otherwise it stays a literal.
-- � Zero+ quote strings (0-quote falls back to identifier if defined).
-- � String interpolation is minimal (basic `{name}` / `$name` only; no currency variants).
-- 🟡 "Number names": English words (`zero`..`nineteen`, `twenty`..`ninety`, scales up to `quintillion`) + Polish words (`jeden`..`dziewietnascie`, `dwadziescia`.., scales up to `trylion`); parsed to a number only if none of the words are names in scope and until an unknown word shows up (then the literal becomes the full input string). Digit tokens can also be names (fall back to literal if no such name exists). No fractions / `twenty-one` / Polish fractional / negatives yet.
-
----
-
-## ❌ Still missing (from the official README / spec)
-
-
-### Syntax / whitespace / parser quirks
-- ❌ Indentation rule: exactly 3 spaces (and -3 spaces).
-- ❌ Full “editable vs re-assignable” model (mutating structures/objects like `push/pop`).
-- ❌ Deleting keywords/paradigms (`delete class`, `delete delete`, …).
-- ❌ AQMI / AI / Copilot gag-features from the README.
-- ❌ README-style installer/CLI (we only have our .NET runner).
-
-
-### Operators / expressions
-- ❌ `^` (exponentiation) and other extra operators from examples.
-
-### Strings
-- ❌ “Rich text” / links in strings.
-
-### `previous` / `next` / `current` as "keywords"
-- ✅ `current`.
-- ❌ `await next score` and the whole async/await model from the README.
-
-### File structure / import/export
-- ✅ File separator via `=====` inside a single file.
-- ✅ Naming files via `======= add.gom =======`.
-- ✅ `export ... to "..."!` and `import ...!`.
-
-### OOP / classes
-- ✅ `Name is a class { ... }` with the “one class = one instance” rule (constructor runs on first touch).
-- ✅ Indexed fields and methods (`obj["field"]`, `obj["method"] args`) with `source` as the baked-in `this`.
-- ✅ Field lifecycle: history/previous/next/when work on fields, delete drops the field; singleton is shared across aliases.
-
-### Time
-- ❌ `Date.now()` and the ability to change time via `Date.now() -= ...`.
-
-### DBX / HTML-in-code
-- ❌ DBX (HTML/JSX-like in code).
-- ❌ `htmlClassName` rules.
-
-### Async / concurrency
-- ❌ `async` functions “alternating per line”.
-- ❌ `noop` as “waiting” / occupying a line.
-
-### Signals
-- ❌ `use(...)` as signals (a function that is both getter/setter).
-- ❌ Destructuring `const var [get, set] = use(0)!`.
-
-### Language `delete`
-- ❌ `delete class!`, `delete delete!`, etc. (deleting keywords / paradigms).
-
-### Other
-
-
-
----
-
-## Suggested next work order
-
-1) Spec compatibility: `;` as not + “no-normal-parentheses” mode (or a compatibility mode).  
-2) Naming (wider Unicode + number naming).  
-3) “Editable” mutability (or at least sensible array mutation for `const var` / `var var`).  
-4) Indentation + significant whitespace.
+- Installation: we ship a .NET console app; no installer/installer-installer flow.
+- Copilot: not applicable; interpreter does not block tooling.
+- Ownership: not enforced by the interpreter.
+- Contributing: charity/orga guidance not mirrored here.
+- Compiling: we provide a real interpreter instead of the ChatGPT prompt workflow.
+- Highlighting: no VSCode highlighting config included.
+- Vision Pro / Edutainment: marketing-only sections.
+- Examples: we have test `.dberd` files, but no curated `Examples.md` equivalent yet.

@@ -1,189 +1,69 @@
-# DreamBerd (C# interpreter) — lista funkcji: jest vs brakuje
+# DreamBerd (C# interpreter) — zgodnosc ze Spec.md
 
-Ten plik porównuje **aktualny stan naszego interpretera w C#** z „kanoniczną” specyfikacją/README projektu **DreamBerd** (repozytorium na GitHubie, które bywa nazywane „Gulf of Mexico”).
-
-- **Stan projektu (ten repo ZIP):** interpreter DreamBerd w C# (.NET), konsolka + REPL.
-- **Cel dokumentu:** szybka checklista „co mamy” i „co jeszcze nie istnieje”, żeby nie zgubić kierunku.
+Ten plik porownuje nasz interpreter C# z oficjalnym `Spec.md` (DreamBerd/GulfOfMexico).
 
 Legenda:
-- ✅ = zaimplementowane
-- 🟡 = częściowo / inaczej niż w specyfikacji
-- ❌ = brak
-- Migawka progresu (wazenie: partial = 0.5): 65 ✅, 7 �, 15 ❌ -> ok. 79% pokrycia.
+- [x] zaimplementowane
+- [~] czesciowe / inne niz w spec
+- [ ] brak
 
----
+Migawka (partial = 0.5):
+- Liczymy 34 sekcje jezykowe z `Spec.md` (bez czysto marketingowych/organizacyjnych: Installation, Copilot, Ownership, Contributing, Compiling, Highlighting, Vision Pro, Edutainment, Examples).
+- Wynik: 14 [x], 7 [~], 13 [ ] -> ok. 52% pokrycia.
 
-## ✅ Co już mamy w tym interpreterze (zgodne z README lub bardzo blisko)
+## Pozycje ze Spec.md (liczone)
 
-### Uruchamianie
-- ✅ Tryb **plik**: `DreamberdInterpreter.exe <ścieżka>` → wykonaj plik.
-- ✅ Tryb **REPL**: bez argumentów → czyta wejście aż do pustej linii, odpala, powtarza.
+| Sekcja ze Spec.md | Status | Uwagi |
+| --- | --- | --- |
+| Exclamation Marks! | [x] | `!`/`?` jako terminatory, wiele znakow, `;` to negacja. |
+| Declarations | [~] | Cztery kombinacje + `const const const`; model "editable vs re-assignable" uproszczony (brak regulek mutacji obiektow). |
+| Immutable Data | [x] | `const const const` jest niezmienne; zakres tylko w biezacym uruchomieniu. |
+| Naming | [x] | Dowolne Unicode/emoji/cyfry/keywordy, puste nazwy, token liczbowy moze byc identyfikatorem. |
+| Arrays | [x] | Literaly, indeks start -1, indeksy float, brakujacy indeks -> `undefined`, helper `numArray`. |
+| When | [x] | `when` subskrybuje uzyte zmienne; nawiasy opcjonalne; wildcard bez zaleznosci. |
+| Lifetimes | [x] | `<N>/<Ns>/<Infinity>` i ujemne lifetimes; wygasanie powoduje fallback do starszych overloadow. |
+| Loops | [~] | W specyfikacji "no loops"; interpreter ma `while` + `break`/`continue`. |
+| Booleans | [x] | `true` / `false` / `maybe`. |
+| Arithmetic | [x] | Znaczace spacje, `+ - * /`, unarne; slowne liczby EN/PL (ograniczone, bez zlozen typu twenty-one); dzielenie przez 0 -> `undefined`. |
+| Indents | [ ] | Brak egzekwowania reguly 3 spacji. |
+| Equality | [x] | `==`, `===`, `====` oraz super-luzne `=`. |
+| Functions | [x] | Dowolny prefiks slowa "function"; nawiasy opcjonalne; dziala return/rekurencja. |
+| Dividing by Zero | [x] | `/0` zwraca `undefined`. |
+| Strings | [~] | Dowolna liczba cudzyslowow, asymetryczne; 0-cudzyslowow w pierwszej kolejnosci szuka identyfikatora (spec: zawsze string). |
+| String Interpolation | [~] | Podstawowe `{name}` / `$name`; brak wariantow walutowych/typograficznych. |
+| Types | [ ] | Brak obslugi adnotacji typow. |
+| Regular Expressions | [ ] | Brak typu `RegExp`. |
+| Previous | [~] | `previous/next/current` + `history`; brak `await next`. |
+| File Structure | [ ] | Brak blokow `=====` w jednym pliku. |
+| Exporting | [ ] | Brak `export ... to` / `import ...!`. |
+| Classes | [ ] | Brak klas/singeltonow/pol. |
+| Time | [ ] | Brak `Date.now()` i modyfikacji czasu. |
+| Delete | [~] | Dziala kasowanie prymitywow; brak kasowania keywordow/paradygmatow. |
+| Overloading | [~] | Priorytet wg liczby `!`, potem nowosc, fallback przez lifetimes; brak odwroconego `¡`. |
+| Semantic naming | [x] | Prefiksy typu sName/iAge/bHappy sa dozwolone; dodatkowych semantyk nie potrzeba. |
+| Reversing | [x] | `reverse!` dziala lokalnie. |
+| Class Names | [ ] | Brak `className` (i brak klas). |
+| DBX | [ ] | Brak wstrzykiwania HTML/DBX. |
+| Rich text | [ ] | Brak rich-text/odnosnikow w stringach. |
+| Asynchronous Functions | [ ] | Brak `async`/`await`/`noop` kolejkowania. |
+| Signals | [ ] | Brak `use()` i getter/setter destructuring. |
+| AI | [ ] | Brak AEMI/ABI/AQMI (automatyczne znaki). |
+| Parentheses | [x] | Nawiasy w wiekszosci ignorowane/traktowane jak spacje. |
 
-### Lekser + parser
-- ✅ Tokenizacja podstawowej składni (identyfikatory, liczby, stringi, operatory, bloki).
-- ✅ Parser AST dla statementów i wyrażeń.
-- ✅ Błędy z `line:column` + podkreśleniem miejsca w linii.
+## Nasze dodatki poza specyfikacja
 
-### Zakończenia statementów
-- ✅ `!` jako terminator statementu.
-- ✅ `?` jako terminator debug (drukuje wartość wyrażenia, a dla identyfikatora także `history(...)`).
-- ✅ Dowolna liczba `!`/`?` (np. `!!!`) jest akceptowana.
-- ✅ Liczba `!` jest używana jako *priorytet deklaracji* (overloading).
+- `while`/`break`/`continue`; miejscami terminator po bloku jest opcjonalny.
+- `printsl` oraz helpery stdlib (`readFile`, `readLines`, `trim`, `split`, `lines`, `charAt`, `slice`, `toNumber`/`parseInt`).
+- Slowne liczby EN/PL; dodatkowe operatory unarne/tryg/clamp/wrap/potegi/korzenie.
+- `history(x)`, fallback z lifetimes, szeroko opcjonalne nawiasy.
 
-### Deklaracje (mutability)
-- ✅ `const const`, `const var`, `var const`, `var var`.
-- ✅ `const const const` jako globalny, immutable store (nie da się przypisać ani nadpisać).
-- 🟡 Semantyka „editable vs re-assignable” jest uproszczona (nie mamy obiektów/metod typu `push/pop`).
+## Sekcje ze Spec.md nie liczone do procentu
 
-### Typy i literały
-- ✅ Liczby (double).
-- ✅ Stringi w `"..."` oraz `'...'`.
-- ✅ Booleany 3-stanowe: `true`, `false`, `maybe`.
-- ✅ `undefined`.
-- 🟡 `null` istnieje jako wartość runtime (np. wynik statementów), ale nie ma osobnego literału `null` w parserze.
-
-### Wyrażenia i operatory
-- ✅ Arytmetyka: `+ - * /` (dzielenie przez 0 → `undefined`).
-- ✅ Porównania: `< > <= >=`.
-- ✅ Równość: `==` (very loose / stringowo), `===` (loose / numerycznie), `====` (strict).
-- ✅ Operator `=` jako "super-luzna rownosc" (README wspomina "jesli chcesz byc duzo mniej precyzyjny").
-- ✅ Unarny minus: `-x`.
-- ✅ Unarny not: `;expr` (true↔false, maybe/undefined przechodzi).
-- ✅ Postfixowe łańcuchy `x++++--!` i potęgowanie `x****!` (styl DreamBerd).
-- ✅ Znaczące spacje w operatorach binarnych (mniej spacji = wyższy priorytet; remis → klasyczny precedens).
-- ✅ Nawiasy są ignorowane / traktowane jak whitespace (wywołania, warunki, deklaracje bez nawiasów).
-- ✅ Przypisanie: `x = expr`.
-- ✅ Przypisanie indeksu: `arr[idx] = expr`.
-- ✅ Update statements `x :+ y!`, `:-`, `:*`, `:/`, `:%`, `:??`, `:<`, `:>`, bitowe `:& :| :^ :<< :>>`, potęgi `:**!`, pierwiastki `:\\!` itd.
-- ✅ Dodatkowe operatory: abs `||x`; trygonometria `~x`/`~~x`/`~~~x`; aliasy min/max `<>` `><` `⌊⌋` `⌈⌉`; clamp/wrap `▷`/`↻` i słowne `clamp`/`wrap` z zakresami na nawiasach kwadratowych `[lo .. hi]`/`]lo .. hi[`, plus update `:▷` / `:↻` (wrap obsługuje opcjonalną deltę przed `@`).
-
-### Operator warunkowy (4 gałęzie)
-- ✅ `cond ? whenTrue`
-- ✅ Opcjonalne gałęzie (mogą wystąpić w dowolnej kolejności, i mogą być pominięte):
-  - `: whenFalse`
-  - `:: whenMaybe`
-  - `::: whenUndefined`
-- ✅ Brakująca gałąź → wynik `undefined`.
-
-### Kontrola przepływu
- - ✅ `if cond ... else ... idk ...` (nawiasy opcjonalne / ignorowane)
-  - `idk` odpala się, gdy `cond` jest `maybe`.
-- ✅ Bloki `{ ... }` tworzą scope (shadowing działa).
-- ✅ `return expr` w funkcjach.
-
-### Funkcje
- - ✅ Deklaracje: `function|func|fun|fn|functi|f name paramy => { ... }` (paramy oddzielone przecinkami; nawiasy opcjonalne/ignorowane)
-- ✅ Call stack + lokalne zmienne funkcji.
-- ✅ Rekurencja działa.
-
-### Tablice
-- ✅ Literały: `[a, b, c]`.
-- ✅ Indeksy startują od `-1`.
-- ✅ Indeksy mogą być float (`double`).
-- ✅ Odczyt brakującego indeksu → `undefined`.
-- ✅ `numArray(init, size)` tworzy tablicę numeryczną (indeksy od -1).
-
-### Lifetimes + overloading deklaracji
-- ✅ Lifetime: `<N>` (linie), `<N s>` (sekundy), `<Infinity>`.
-- ✅ Overloading: wiele deklaracji tej samej nazwy w scope:
-  - wybór aktywnej: najwyższy priorytet (liczba `!`), potem „najświeższa”
-  - wygasanie lifetimes może powodować fallback do starszej deklaracji
-- ✅ Historia zmiennych: `previous(x)`, `next(x)`, `history(x)`.
-- ✅ Formy bez nawiasow: `previous x`, `next x`, `current x`.
-
-### when(...)
-- ✅ `when condition { ... }` subskrybuje mutacje zmiennych użytych w condition (nawiasy opcjonalne/ignorowane).
-- ✅ Gdy condition nie używa zmiennych (np. `when (true)`), odpala się po każdej mutacji (wildcard `*`).
-- ✅ Dispatch przez kolejkę (bez rekurencji przy mutacjach).
-
-### delete
-- ✅ `delete <primitive>` działa na number/string/boolean (zgodnie z README).
-  - po usunięciu: użycie tej wartości rzuca błąd.
-
-### Mini stdlib
-- ✅ `print(...)`
-- ✅ IO: `readFile(path)`, `readLines(path)`
-- ✅ Strings: `lines(text)`, `trim(text)`, `split(text, sep)`, `charAt(text, idx)`, `slice(text, start)`
-- ✅ Konwersje: `toNumber(x)` (+ aliasy `parseInt`, `parseNumber`)
-
----
-
-## ✅ Nasze rozszerzenia (poza oficjalnym README DreamBerd)
-
-- ✅ `while (cond) { ... }` + `break` + `continue` (README mówi „no loops”).
-- ✅ Terminator statementu bywa opcjonalny (np. po `if/while` i po niektórych statementach).
-
----
-
-## 🟡 Mamy, ale inaczej / niepełne (względem README)
-
-- 🟡 Mutability `const var` / `var var` nie wspiera „mutacji obiektów” (brak metod jak `push/pop`, brak obiektów).
-- ✅ Naming: Unicode/emoji identyfikatory, keywordy jako nazwy, cyfry jako nazwy; puste nazwy przez `""` też działają. Token liczbowy w wyrażeniu najpierw próbuje znaleźć zmienną/funkcję o takiej nazwie, dopiero potem jest literalem.
-- � Stringi bez cudzyslowow: 0-quote fallback do identyfikatora, jesli istnieje.
-- � Interpolacja stringow jest minimalna (podstawowe `{name}` / `$name`, bez wariantow walut).
-- 🟡 "Number names": slowa liczb po angielsku (`zero`..`nineteen`, `twenty`..`ninety`, skale do `quintillion`) i po polsku (`jeden`..`dziewietnascie`, `dwadziescia`.., skale do `trylionu`); parsujemy na literal tylko gdy slowa nie sa nazwami w scope i dopoki nie trafimy na nieznane slowo (wtedy literal zmienia sie w string calkowitego wejscia). Tokeny cyfr też mogą być nazwami (fallback do literalu przy braku nazwy). Brak ulamkow / `twenty-one` / polskich ulamkow / znaku minus.
-
----
-
-## ❌ Co jeszcze brakuje (z oficjalnego README / specyfikacji)
-
-### Składnia / whitespace / parser-quirks
-
-- ❌ Narzucone indenty: dokładnie 3 spacje (i -3 spacje).
-- ❌ Pełny model „editable vs re-assignable” (mutacje struktur/obiektów jak `push/pop`).
-- ❌ Kasowanie keywordów/paradygmatów (`delete class`, `delete delete`, …).
-- ❌ AQMI / AI / Copilot gag-features z README.
-- ❌ Instalator / CLI zgodny z README (tu mamy tylko nasz .NET runner).
-
-
-### Operatory / wyrażenia
-- ❌ Operator `=` jako „super-luźna równość” (README wspomina „jeśli chcesz być dużo mniej precyzyjny”).
-- ❌ `^` (potęgowanie) i inne dodatkowe operatory z przykładów.
-
-### Stringi
-- ❌ Dowolna liczba cudzysłowów (np. `''''Lu''''`), włącznie z **0** (`name = Luke!`).
-- ❌ „Rich text” / linki w stringach.
-
-### `previous` / `next` / `current` jako „keywordy”
-- ✅ `current`.
-- ❌ `await next score` i w ogóle async/await model z README.
-
-### Struktura plików / import/export
-- ✅ Separator plików przez `=====` w jednym pliku.
-- ✅ Nadawanie nazw plikom `======= add.gom =======`.
-- ✅ `export ... to "..."!` i `import ...!`.
-
-### OOP / klasy
-- ✅ `Nazwa is a class { ... }` z zasadą „jedna klasa = jedna instancja” (konstruktor na pierwszy dostęp).
-- ✅ Indeksowane pola i metody (`obj["pole"]`, `obj["metoda"] args`) z wbudowanym `source` jako `this`.
-- ✅ Życie pól: history/previous/next/when działa na polach, delete usuwa pole; singleton jest współdzielony przez aliasy.
-
-### Czas
-- ❌ `Date.now()` i możliwość zmiany czasu przez `Date.now() -= ...`.
-
-### DBX / HTML-in-code
-- ❌ DBX (HTML/JSX-like w kodzie).
-- ❌ `htmlClassName` zasady.
-
-### Asynchroniczność / współbieżność
-- ❌ `async` funkcje „na zmianę po liniach”.
-- ❌ `noop` jako „czekanie”/zajmowanie linii.
-
-### Signals
-- ❌ `use(...)` jako sygnały (funkcja będąca jednocześnie getterem/setterem).
-- ❌ Destrukturyzacja `const var [get, set] = use(0)!`.
-
-### `delete` języka
-- ❌ `delete class!`, `delete delete!` itd. (kasowanie słów kluczowych / paradygmatów).
-
-### Inne
-
-
----
-
-## Sugestia kolejności dalszych prac
-
-1) Dopiąć zgodność ze spec: `;` jako not + tryb bez-normalnych-nawiasów (albo tryb kompatybilności).  
-2) Naming (szerszy Unicode + number naming).  
-3) Mutability „editable” (albo przynajmniej sensowna mutacja tablic dla `const var` / `var var`).  
-4) Indenty + significant whitespace.
+- Installation: mamy po prostu aplikacje .NET, brak installer/installer-installer.
+- Copilot: brak specjalnych zabezpieczen.
+- Ownership: interpreter nic nie wymusza.
+- Contributing: nie odwzorowujemy sekcji charity.
+- Compiling: zamiast workflowu na czacie mamy realny interpreter.
+- Highlighting: w repo brak konfiga do VSCode.
+- Vision Pro / Edutainment: sekcje marketingowe.
+- Examples: mamy pliki testowe, ale nie ma jeszcze odpowiednika `Examples.md`.
