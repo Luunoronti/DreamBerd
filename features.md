@@ -9,6 +9,7 @@ Legenda:
 - ✅ = zaimplementowane
 - 🟡 = częściowo / inaczej niż w specyfikacji
 - ❌ = brak
+- Migawka progresu (ważenie: partial = 0.5): 57 ✅, 5 🟡, 25 ❌ → ok. 68% pokrycia.
 
 ---
 

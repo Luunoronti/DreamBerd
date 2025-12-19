@@ -125,19 +125,19 @@ All are statement forms `target :op value!` (or specialized forms):
 
 
 ### Examples
-- `docs/examples/literals.dberd` - literals, arrays, ranges.
-- `docs/examples/identifiers-names.dberd` - identifiers and keyword names.
-- `docs/examples/expressions.dberd` - operators, roots, conditional.
-- `docs/examples/statements.dberd` - statements, destructuring, blocks.
-- `docs/examples/update-operators.dberd` - update forms.
-- `docs/examples/ranges-clamp-wrap.dberd` - ranges, clamp, wrap.
-- `docs/examples/control-flow.dberd` - if/else/idk, while, when.
-- `docs/examples/functions.dberd` - declarations, calls, return.
-- `docs/examples/classes.dberd` - classes, methods, fields.
-- `docs/examples/history-time-travel.dberd` - history, previous, next.
-- `docs/examples/pattern-matching-destructuring.dberd` - patterns, guards.
-- `docs/examples/delete.dberd` - delete statements.
-- `docs/examples/whitespace-rules.dberd` - whitespace precedence.
+- [docs/examples/literals.dberd](docs/examples/literals.dberd) - literals, arrays, ranges.
+- [docs/examples/identifiers-names.dberd](docs/examples/identifiers-names.dberd) - identifiers and keyword names.
+- [docs/examples/expressions.dberd](docs/examples/expressions.dberd) - operators, roots, conditional.
+- [docs/examples/statements.dberd](docs/examples/statements.dberd) - statements, destructuring, blocks.
+- [docs/examples/update-operators.dberd](docs/examples/update-operators.dberd) - update forms.
+- [docs/examples/ranges-clamp-wrap.dberd](docs/examples/ranges-clamp-wrap.dberd) - ranges, clamp, wrap.
+- [docs/examples/control-flow.dberd](docs/examples/control-flow.dberd) - if/else/idk, while, when.
+- [docs/examples/functions.dberd](docs/examples/functions.dberd) - declarations, calls, return.
+- [docs/examples/classes.dberd](docs/examples/classes.dberd) - classes, methods, fields.
+- [docs/examples/history-time-travel.dberd](docs/examples/history-time-travel.dberd) - history, previous, next.
+- [docs/examples/pattern-matching-destructuring.dberd](docs/examples/pattern-matching-destructuring.dberd) - patterns, guards.
+- [docs/examples/delete.dberd](docs/examples/delete.dberd) - delete statements.
+- [docs/examples/whitespace-rules.dberd](docs/examples/whitespace-rules.dberd) - whitespace precedence.
 
 ---
 
@@ -259,17 +259,17 @@ All are statement forms `target :op value!` (or specialized forms):
 
 
 ### Przyklady
-- `docs/examples/literals.dberd` - literaly, tablice, przedzialy.
-- `docs/examples/identifiers-names.dberd` - identyfikatory i nazwy slow kluczowych.
-- `docs/examples/expressions.dberd` - operatory, pierwiastki, warunkowy.
-- `docs/examples/statements.dberd` - instrukcje, destrukturyzacja, bloki.
-- `docs/examples/update-operators.dberd` - formy update.
-- `docs/examples/ranges-clamp-wrap.dberd` - przedzialy, clamp, wrap.
-- `docs/examples/control-flow.dberd` - if/else/idk, while, when.
-- `docs/examples/functions.dberd` - deklaracje, wywolania, return.
-- `docs/examples/classes.dberd` - klasy, metody, pola.
-- `docs/examples/history-time-travel.dberd` - historia, previous, next.
-- `docs/examples/pattern-matching-destructuring.dberd` - patterny, guardy.
-- `docs/examples/delete.dberd` - delete.
-- `docs/examples/whitespace-rules.dberd` - priorytet ze spacji.
+- [docs/examples/literals.dberd](docs/examples/literals.dberd) - literaly, tablice, przedzialy.
+- [docs/examples/identifiers-names.dberd](docs/examples/identifiers-names.dberd) - identyfikatory i nazwy slow kluczowych.
+- [docs/examples/expressions.dberd](docs/examples/expressions.dberd) - operatory, pierwiastki, warunkowy.
+- [docs/examples/statements.dberd](docs/examples/statements.dberd) - instrukcje, destrukturyzacja, bloki.
+- [docs/examples/update-operators.dberd](docs/examples/update-operators.dberd) - formy update.
+- [docs/examples/ranges-clamp-wrap.dberd](docs/examples/ranges-clamp-wrap.dberd) - przedzialy, clamp, wrap.
+- [docs/examples/control-flow.dberd](docs/examples/control-flow.dberd) - if/else/idk, while, when.
+- [docs/examples/functions.dberd](docs/examples/functions.dberd) - deklaracje, wywolania, return.
+- [docs/examples/classes.dberd](docs/examples/classes.dberd) - klasy, metody, pola.
+- [docs/examples/history-time-travel.dberd](docs/examples/history-time-travel.dberd) - historia, previous, next.
+- [docs/examples/pattern-matching-destructuring.dberd](docs/examples/pattern-matching-destructuring.dberd) - patterny, guardy.
+- [docs/examples/delete.dberd](docs/examples/delete.dberd) - delete.
+- [docs/examples/whitespace-rules.dberd](docs/examples/whitespace-rules.dberd) - priorytet ze spacji.
 

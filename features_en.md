@@ -9,6 +9,7 @@ Legend:
 - ✅ = implemented
 - 🟡 = partial / different from the spec
 - ❌ = missing
+- Progress snapshot (weighted: partial = 0.5): 57 ✅, 5 🟡, 25 ❌ → ~68% coverage.
 
 ---
 

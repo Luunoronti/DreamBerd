@@ -21,6 +21,7 @@ The upstream repo is sometimes called “Gulf of Mexico”, but in this project 
 
 - Feature list (PL): [features.md](./features.md)  
 - Feature list (EN): [features_en.md](./features_en.md)
+- Language guide (PL/EN): [LANGUAGE_GUIDE.md](./LANGUAGE_GUIDE.md)
 
 These files are our source of truth for what is implemented, what differs from the spec, and what is still missing.
 
@@ -28,9 +29,9 @@ These files are our source of truth for what is implemented, what differs from t
 
 ## Spec compatibility
 
-**Estimated: ~68%** compatibility with the upstream README/spec (in terms of user-facing behavior).
+**Estimated: ~68%** compatibility with the upstream README/spec (user-facing behavior), based on the checklist in `features_en.md` (57 implemented, 5 partial counted as 0.5, 25 missing).
 
-This is a *human estimate*, not an automated measurement. Some spec items are pure meme/gag features (AQMI/AI, whitespace-math, “parentheses do nothing”, etc.) that we don’t have yet, while we already implement a bunch of practical core pieces (parser, if/else/idk, functions, arrays, lifetimes, when(), history(), stdlib).  
+This is a *human estimate*, not an automated measurement. Some spec items are pure meme/gag features (AQMI/AI, whitespace-math, "parentheses do nothing", etc.) that we don't have yet, while we already implement a bunch of practical core pieces (parser, if/else/idk, functions, arrays, lifetimes, when(), history(), stdlib).  
 For the detailed breakdown see: [features.md](./features.md) / [features_en.md](./features_en.md).
 
 ---
