@@ -48,7 +48,7 @@ Legend:
 - ✅ Unary not: `;expr` (true↔false, maybe/undefined pass through).
 - ✅ Postfix chains `x++++--!` and power-run `x****!` (DreamBerd style).
 - ✅ Significant whitespace for binary precedence (fewer spaces = tighter; ties → classic precedence).
-- ✅ Parentheses are ignored/treated as whitespace (calls, conditions, declarations without parens).
+- ✅ Parentheses work as normal grouping; function calls require parentheses.
 - ✅ Assignment: `x = expr`.
 - ✅ Index assignment: `arr[idx] = expr`.
 - ✅ Update statements `x :+ y!`, `:-`, `:*`, `:/`, `:%`, `:??`, `:<`, `:>`, bitwise `:& :| :^ :<< :>>`, power run `:**!`, root run `:\\!`, etc.
@@ -63,13 +63,13 @@ Legend:
 - ✅ Missing branch → `undefined`.
 
 ### Control flow
-- ✅ `if cond ... else ... idk ...` (parens optional/ignored)
+- ✅ `if cond ... else ... idk ...` (parens around the condition are optional)
   - `idk` runs when `cond` is `maybe`.
 - ✅ Blocks `{ ... }` create scope (shadowing works).
 - ✅ `return expr` in functions.
 
 ### Functions
-- ✅ Declarations: any prefix of the word `function` (`function|func|fun|fn|functi|f name params => { ... }`), params comma-separated; parens optional/ignored.
+- ✅ Declarations: any prefix of the word `function` (`function|func|fun|fn|functi|f name params => { ... }`), params comma-separated; parens optional.
 - ✅ Call stack + locals.
 - ✅ Recursion works.
 
@@ -85,11 +85,10 @@ Legend:
 - ✅ Overloading: multiple decls of same name in scope:
   - pick highest priority (number of `!`), then newest
   - expiry of lifetimes can fall back to older decls
-- ✅ Variable history: `previous(x)`, `next(x)`, `history(x)`.
-- ✅ No-paren forms: `previous x`, `next x`, `current x`.
+- ✅ Variable history helpers: `previous(x)`, `next(x)`, `current(x)`, `history(x)`.
 
 ### when(...)
-- ✅ `when condition { ... }` subscribes to mutations of variables used in the condition (parens optional/ignored).
+- ✅ `when condition { ... }` subscribes to mutations of variables used in the condition (parens around the condition are optional).
 - ✅ If the condition uses no vars (e.g., `when (true)`), it fires after every mutation (wildcard `*`).
 - ✅ Dispatch via queue (prevents recursive reentry on mutations).
 

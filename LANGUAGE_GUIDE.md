@@ -88,7 +88,7 @@ All are statement forms `target :op value!` (or specialized forms):
 
 ### Functions
 - Declaration: `function name a, b => expression!` or block body.
-- Call without parentheses: `name 1, x+2, "ok"!`.
+- Calls require parentheses: `name(1, x+2, "ok")!`.
 - `return expr!` or `return!`.
 - Built-ins: `print`, `previous`, `next`, `history`, `toNumber`.
 
@@ -160,7 +160,7 @@ All are statement forms `target :op value!` (or specialized forms):
 - [Słowa kluczowe](#słowa-kluczowe)
 
 ### Przegląd
-- DreamBerd to żartobliwy język: nawiasy są opcjonalne i traktowane jak spacje.
+- DreamBerd to żartobliwy język: nawiasy przy warunkach/deklaracjach są opcjonalne, ale działają jak normalne grupowanie; wywołania wymagają nawiasów.
 - Instrukcje kończą się `!` (lub `?` dla debugowego wydruku wartości).
 - Tablice startują od indeksu `-1`. Obiekty to singletony klas.
 - Prawdziwość: liczby ≠ 0, niepuste stringi, tablice/obiekty, boolean `true/maybe`.
@@ -214,7 +214,7 @@ All are statement forms `target :op value!` (or specialized forms):
 - Update z `:?` i ewentualnym `@ [range]` dla wrap.
 
 ### Sterowanie przepływem
-- `if cond { ... } [else { ... }] [idk { ... }]` (bez nawiasów).
+- `if cond { ... } [else { ... }] [idk { ... }]` (nawiasy przy warunku są opcjonalne).
 - `while cond { ... }`, `break!`, `continue!`.
 - `try again!` w if/else/idk ponawia warunek.
 - `when expr { ... }` subskrybuje mutacje zmiennych z `expr` (lub wszystkich, gdy brak).
@@ -222,7 +222,7 @@ All are statement forms `target :op value!` (or specialized forms):
 
 ### Funkcje
 - Deklaracja: `function name a, b => expression!` lub ciało blokowe.
-- Wywołania bez nawiasów: `name 1, x+2, "ok"!`.
+- Wywołania wymagają nawiasów: `name(1, x+2, "ok")!`.
 - `return expr!` lub `return!`.
 - Wbudowane: `print`, `previous`, `next`, `history`, `toNumber`.
 
@@ -250,7 +250,7 @@ All are statement forms `target :op value!` (or specialized forms):
 ### Specjalne reguły odstępów
 - Nawiasy to whitespace; priorytet wymuszają spacje:
   - Mniej spacji przy operatorze → silniejsze wiązanie. Przykład: `1*2 + 3` → `(1*2)+3`; `1 * 2+3` → `1*(2+3)`.
-- Wywołania: `foo 1, 2` jest poprawne (bez nawiasów).
+- Wywołania: `foo(1, 2)` jest poprawne.
 
 ### Słowa kluczowe
 - Sterowanie: `if`, `else`, `idk`, `while`, `break`, `continue`, `when`, `return`, `delete`, `reverse`, `forward`, `try again`.

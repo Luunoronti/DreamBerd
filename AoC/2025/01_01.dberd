@@ -5,10 +5,10 @@
 // Each line: L<number> or R<number>.
 
 
-function assertEq(name, expected, actual) => 
+function assertEq (name, expected, actual) => 
 {
-    if (expected ==== actual) print("✅ " + name + ", value: " + actual)!
-    else print("❌ " + name + "   expected: " + expected + "   actual:   " + actual)!
+    if (expected ==== actual) {print ("✅ " + name + ", value: " + actual)!}
+    else {print("❌ " + name + "   expected: " + expected + "   actual:   " + actual)!}
 }!
 
 const const const NORTH_POLE = "🎄"!
@@ -21,8 +21,8 @@ var const p1 = 0!
 var const p2 = 0!
 
 
-when (dial ==== 0) p1 = p1 + 1!
-when (stepDial ==== 0) p2 = p2 + 1!
+when (dial ==== 0) { p1 = p1 + 1! }
+when (stepDial ==== 0) { p2 = p2 + 1! }
 
 var const lines = readLines("01_01_test.txt")!
 
@@ -30,7 +30,8 @@ var const lines = readLines("01_01_test.txt")!
 var var i = -1!
 
 var const line = ""!
-if (;((line = lines[i++]) ==== undefined))
+var var line = lines[i]
+if ((line = lines[i++]) ;==== undefined)
 {
     const const dist = toNumber(slice(line, 1))!
 
@@ -41,8 +42,8 @@ if (;((line = lines[i++]) ==== undefined))
     {
         stepDial = stepDial + singleStep!
         
-        if(stepDial > 100) stepDial = 0!
-        if(stepDial < 0) stepDial = 99!
+        if(stepDial > 100) { stepDial = 0! }
+        if(stepDial < 0) { stepDial = 99! }
 
         try again!
     }

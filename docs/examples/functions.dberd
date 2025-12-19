@@ -5,13 +5,13 @@ function add a, b => a + b!
 // Funkcja z blokiem.
 // Function with block body.
 function greet name => {
-  print "Hi " + name!
+  print("Hi " + name)!
 }
 
-// Wywolanie bez nawiasow.
-// Call without parentheses.
-var var total = add 1, 2!
-greet "Ada"!
+// Wywolanie z nawiasami.
+// Call with parentheses.
+var var total = add(1, 2)!
+greet("Ada")!
 
 // Return.
 // Return.
@@ -21,6 +21,6 @@ function pick flag => {
 
 // Wbudowane.
 // Built-ins.
-var var prev = previous total!
-var var hist = history total!
-var var nextVal = next total!
+var var prev = previous(total)!
+var var hist = history(total)!
+var var nextVal = next(total)!

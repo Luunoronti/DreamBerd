@@ -1,14 +1,13 @@
-// Nawiasy to whitespace.
-// Parentheses are whitespace.
+// Nawiasy grupują (nie są whitespace).
+// Parentheses group expressions (not whitespace).
 print(1, 2)!
-print 1, 2!
 
 // Spacje zmieniaja priorytet.
 // Spaces change precedence.
 var var a = 1*2 + 3!
 var var b = 1 * 2+3!
 
-// Wywolanie bez nawiasow.
-// Call without parentheses.
+// Wywolanie z nawiasami.
+// Call with parentheses.
 function mul a, b => a * b!
-var var c = mul 2, 3!
+var var c = mul(2, 3)!

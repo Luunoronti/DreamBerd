@@ -51,7 +51,7 @@ Legenda:
 - ✅ Unarny not: `;expr` (true↔false, maybe/undefined przechodzi).
 - ✅ Postfixowe łańcuchy `x++++--!` i potęgowanie `x****!` (styl DreamBerd).
 - ✅ Znaczące spacje w operatorach binarnych (mniej spacji = wyższy priorytet; remis → klasyczny precedens).
-- ✅ Nawiasy są ignorowane / traktowane jak whitespace (wywołania, warunki, deklaracje bez nawiasów).
+- ✅ Nawiasy okrągłe działają klasycznie jako grupowanie; wywołania funkcji wymagają nawiasów.
 - ✅ Przypisanie: `x = expr`.
 - ✅ Przypisanie indeksu: `arr[idx] = expr`.
 - ✅ Update statements `x :+ y!`, `:-`, `:*`, `:/`, `:%`, `:??`, `:<`, `:>`, bitowe `:& :| :^ :<< :>>`, potęgi `:**!`, pierwiastki `:\\!` itd.
@@ -66,13 +66,13 @@ Legenda:
 - ✅ Brakująca gałąź → wynik `undefined`.
 
 ### Kontrola przepływu
- - ✅ `if cond ... else ... idk ...` (nawiasy opcjonalne / ignorowane)
+ - ✅ `if cond ... else ... idk ...` (nawiasy przy warunku są opcjonalne)
   - `idk` odpala się, gdy `cond` jest `maybe`.
 - ✅ Bloki `{ ... }` tworzą scope (shadowing działa).
 - ✅ `return expr` w funkcjach.
 
 ### Funkcje
- - ✅ Deklaracje: `function|func|fun|fn|functi|f name paramy => { ... }` (paramy oddzielone przecinkami; nawiasy opcjonalne/ignorowane)
+ - ✅ Deklaracje: `function|func|fun|fn|functi|f name paramy => { ... }` (paramy oddzielone przecinkami; nawiasy opcjonalne)
 - ✅ Call stack + lokalne zmienne funkcji.
 - ✅ Rekurencja działa.
 
@@ -88,11 +88,10 @@ Legenda:
 - ✅ Overloading: wiele deklaracji tej samej nazwy w scope:
   - wybór aktywnej: najwyższy priorytet (liczba `!`), potem „najświeższa”
   - wygasanie lifetimes może powodować fallback do starszej deklaracji
-- ✅ Historia zmiennych: `previous(x)`, `next(x)`, `history(x)`.
-- ✅ Formy bez nawiasow: `previous x`, `next x`, `current x`.
+- ✅ Historia zmiennych: `previous(x)`, `next(x)`, `current(x)`, `history(x)`.
 
 ### when(...)
-- ✅ `when condition { ... }` subskrybuje mutacje zmiennych użytych w condition (nawiasy opcjonalne/ignorowane).
+- ✅ `when condition { ... }` subskrybuje mutacje zmiennych użytych w condition (nawiasy przy condition są opcjonalne).
 - ✅ Gdy condition nie używa zmiennych (np. `when (true)`), odpala się po każdej mutacji (wildcard `*`).
 - ✅ Dispatch przez kolejkę (bez rekurencji przy mutacjach).
 

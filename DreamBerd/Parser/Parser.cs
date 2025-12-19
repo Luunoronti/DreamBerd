@@ -553,15 +553,34 @@ namespace DreamberdInterpreter
             {
                 var parameters = new List<string>();
 
-                while (!Check(TokenType.Arrow))
+                bool hasParens = Match(TokenType.LeftParen);
+                if (hasParens)
                 {
-                    if (Match(TokenType.Comma))
-                        continue;
+                    while (!Check(TokenType.RightParen))
+                    {
+                        if (Match(TokenType.Comma))
+                            continue;
 
-                    Token paramTok = ConsumeNameToken("Expected parameter name or '=>' after function name.");
-                    string paramName = TokenToName(paramTok);
-                    parameters.Add(paramName);
-                    DeclareName(paramName);
+                        Token paramTok = ConsumeNameToken("Expected parameter name or ')' before '=>' after function name.");
+                        string paramName = TokenToName(paramTok);
+                        parameters.Add(paramName);
+                        DeclareName(paramName);
+                    }
+
+                    Consume(TokenType.RightParen, "Expected ')' after function parameter list.");
+                }
+                else
+                {
+                    while (!Check(TokenType.Arrow))
+                    {
+                        if (Match(TokenType.Comma))
+                            continue;
+
+                        Token paramTok = ConsumeNameToken("Expected parameter name or '=>' after function name.");
+                        string paramName = TokenToName(paramTok);
+                        parameters.Add(paramName);
+                        DeclareName(paramName);
+                    }
                 }
 
                 Consume(TokenType.Arrow, "Expected '=>' after function parameter list.");
@@ -1721,7 +1740,7 @@ Expression ParsePower()
             {
                 var kw = Advance();
                 var callee = new IdentifierExpression(kw.Lexeme, kw.Position);
-                var arg = ParsePostfix();
+                var arg = ParsePostfixWithParens();
                 return new CallExpression(callee, new List<Expression> { arg }, kw.Position);
             }
 
@@ -1787,10 +1806,10 @@ Expression ParsePower()
                 return new UnaryExpression(UnaryOperator.Negate, right, pos);
             }
 
-            return ParsePostfix();
+            return ParsePostfixWithParens();
         }
 
-        private Expression ParsePostfix()
+        private Expression ParsePostfixWithParens()
         {
             Expression expr = ParsePrimary();
 
@@ -1808,62 +1827,29 @@ Expression ParsePower()
                     continue;
                 }
 
-                // Call bez nawias├│w: foo 1, 2, albo foo(1,2) (nawiasy to whitespace)
-                if (TryParseCallArguments(ref expr))
+                // Klasyczne wywolanie z nawiasami: foo(expr, expr, ...)
+                if (Match(TokenType.LeftParen))
+                {
+                    var args = new List<Expression>();
+                    if (!Check(TokenType.RightParen))
+                    {
+                        do
+                        {
+                            args.Add(ParseAssignment());
+                        } while (Match(TokenType.Comma));
+                    }
+
+                    Consume(TokenType.RightParen, "Expected ')' after function arguments.");
+
+                    int callPos = args.Count > 0 ? args[0].Position : expr.Position;
+                    expr = new CallExpression(expr, args, callPos);
                     continue;
+                }
 
                 break;
             }
 
-            bool TryParseCallArguments(ref Expression target)
-            {
-                if (IsAtEnd())
-                    return false;
-
-                var nextType = Peek().Type;
-
-                // jesli nastepny token to operator binarny (albo ';' negujace operator), to NIE jest call
-                if (BinaryOperatorTable.ContainsKey(nextType))
-                    return false;
-
-                if (nextType == TokenType.Semicolon &&
-                    _current + 1 < _tokens.Count &&
-                    BinaryOperatorTable.ContainsKey(_tokens[_current + 1].Type))
-                    return false;
-
-                bool startsRangeArgument = nextType == TokenType.RightBracket && LooksLikeRangeLiteral(_current + 1);
-
-                if (!IsArgumentStart(nextType) && !startsRangeArgument)
-                    return false;
-
-                if (_inWhenCondition &&
-                    Peek().Type == TokenType.Identifier &&
-                    string.Equals(Peek().Lexeme, "matches", StringComparison.Ordinal))
-                    return false;
-
-                // '[' bez odst─Öpu po callee to index, nie argument
-                if (Peek().Type == TokenType.LeftBracket &&
-                    HasNoRealSpacesBetweenTokens(_current - 1, _current))
-                    return false;
-
-                var args = new List<Expression>();
-                do
-                {
-                    args.Add(ParseAssignment());
-            } while (Match(TokenType.Comma));
-
-            int callPos = args.Count > 0 ? args[0].Position : target.Position;
-            target = new CallExpression(target, args, callPos);
-            return true;
-        }
-
-        bool IsArgumentStart(TokenType type) =>
-            (IsNameTokenType(type) && (_allowStatementKeywordsAsArgs || !IsStatementKeywordToken(type))) ||
-            type == TokenType.Semicolon ||
-            type == TokenType.LeftBracket;
-
-
-        // postfix power UPDATE: **, ****, ******, ...
+            // postfix power UPDATE: **, ****, ******, ...
             // DreamBerd twist (like ++++): operator is repeated "**" pairs.
             // Exponent = 1 + (starCount / 2).
             // Examples:
@@ -1899,7 +1885,7 @@ Expression ParsePower()
                 expr = new PowerStarsExpression(expr, exponent, tok.Position);
             }
 
-            // 2) Potem postfix update chain: pozwalamy miesza─ç ++ i --
+            // 2) Potem postfix update chain: pozwalamy mieszać ++ i --
             int delta = 0;
             bool sawAny = false;
             int opPos = -1;
@@ -1927,7 +1913,7 @@ Expression ParsePower()
 
             if (sawAny)
             {
-                // Target musi by─ç assignable: ident albo arr[index]
+                // Target musi być assignable: ident albo arr[index]
                 if (!IsAssignable(expr))
                     throw new InterpreterException("Postfix ++/-- requires an assignable target (variable or arr[index]).", opPos);
 
@@ -1938,7 +1924,6 @@ Expression ParsePower()
 
             return expr;
         }
-
 
         private Expression ParsePrimary()
         {

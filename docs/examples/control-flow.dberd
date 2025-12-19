@@ -2,11 +2,11 @@
 // If, else, idk.
 var var mood = maybe!
 if mood {
-  print "maybe"!
+  print("maybe")!
 } else {
-  print "nope"!
+  print("nope")!
 } idk {
-  print "unknown"!
+  print("unknown")!
 }
 
 // While i sterowanie petla.
@@ -25,15 +25,15 @@ if tries < 2 {
   tries :+ 1!
   try again!
 } else {
-  print "done"!
+  print("done")!
 }
 
 // When i pattern when.
 // When and pattern when.
 when i {
-  print "i changed"!
+  print("i changed")!
 }
 var var point = {x: 3, y: 4}!
 when point matches {x, y} where x > 0 {
-  print x!
+  print(x)!
 }

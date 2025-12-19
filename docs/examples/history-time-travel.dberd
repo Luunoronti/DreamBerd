@@ -3,14 +3,14 @@
 var var x = 1!
 x = 2!
 x = 3!
-var var hx = history x!
-previous x!
-next x!
+var var hx = history(x)!
+previous(x)!
+next(x)!
 
 // Historia pola obiektu.
 // Object field history.
 var var box = {value: 10}!
 box["value"] = 11!
 box["value"] = 12!
-var var hv = history box["value"]!
-previous box["value"]!
+var var hv = history(box["value"])!
+previous(box["value"])!

@@ -98,8 +98,6 @@ namespace DreamberdInterpreter
                     case '\r':
                     case '\t':
                     case '\n':
-                    case '(':
-                    case ')':
                         _current++;
                         break;
                     case '/':
@@ -139,6 +137,12 @@ namespace DreamberdInterpreter
                     break;
                 case '}':
                     AddToken(TokenType.RightBrace);
+                    break;
+                case '(':
+                    AddToken(TokenType.LeftParen);
+                    break;
+                case ')':
+                    AddToken(TokenType.RightParen);
                     break;
                 case ',':
                     AddToken(TokenType.Comma);
