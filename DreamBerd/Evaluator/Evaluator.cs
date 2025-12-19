@@ -38,8 +38,43 @@ namespace DreamberdInterpreter
         private readonly Dictionary<string, ClassInstance> _classInstances = new Dictionary<string, ClassInstance>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldHistory> _fieldHistory = new Dictionary<string, FieldHistory>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldHistory> _staticFieldHistory = new Dictionary<string, FieldHistory>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Dictionary<string, ExportedBinding>> _exportsByFile = new Dictionary<string, Dictionary<string, ExportedBinding>>(StringComparer.OrdinalIgnoreCase);
 
         private readonly Stack<CallFrame> _callStack = new Stack<CallFrame>();
+
+        private enum ExportedBindingKind
+        {
+            Value,
+            Function,
+            Class
+        }
+
+        private sealed class ExportedBinding
+        {
+            public ExportedBindingKind Kind { get; }
+            public Value Value { get; }
+            public FunctionDefinition? Function { get; }
+            public ClassDefinition? Class { get; }
+
+            private ExportedBinding(ExportedBindingKind kind, Value value, FunctionDefinition? function, ClassDefinition? @class)
+            {
+                Kind = kind;
+                Value = value;
+                Function = function;
+                Class = @class;
+            }
+
+            public static ExportedBinding FromValue(Value value) =>
+                new ExportedBinding(ExportedBindingKind.Value, value, null, null);
+
+            public static ExportedBinding FromFunction(FunctionDefinition function) =>
+                new ExportedBinding(ExportedBindingKind.Function, Value.Undefined, function, null);
+
+            public static ExportedBinding FromClass(ClassDefinition @class) =>
+                new ExportedBinding(ExportedBindingKind.Class, Value.Undefined, null, @class);
+        }
+
+        public string CurrentFileName { get; set; } = "main.gom";
 
         public Evaluator(VariableStore variables, IConstConstConstStore constStore)
         {
@@ -47,6 +82,90 @@ namespace DreamberdInterpreter
             _constStore = constStore ?? throw new ArgumentNullException(nameof(constStore));
             CurrentDirectory = System.Environment.CurrentDirectory;
             RegisterStdLibDefaultMethods();
+        }
+
+        private static string NormalizeFileName(string name) =>
+            string.IsNullOrWhiteSpace(name) ? string.Empty : name.Trim();
+
+        private bool IsNameDefined(string name)
+        {
+            if (_constStore.TryGet(name, out _))
+                return true;
+            if (_variables.TryGet(name, out _))
+                return true;
+            if (_functions.ContainsKey(name))
+                return true;
+            if (_classes.ContainsKey(name))
+                return true;
+            return false;
+        }
+
+        private ExportedBinding ResolveExportBinding(string name, int position)
+        {
+            if (_functions.TryGetValue(name, out var fn))
+                return ExportedBinding.FromFunction(fn);
+
+            if (_classes.TryGetValue(name, out var cls))
+                return ExportedBinding.FromClass(cls);
+
+            if (_constStore.TryGet(name, out var constVal))
+                return ExportedBinding.FromValue(constVal);
+
+            if (_variables.TryGet(name, out var varVal))
+                return ExportedBinding.FromValue(varVal);
+
+            throw new InterpreterException($"Cannot export '{name}' because it is not defined.", position);
+        }
+
+        private void RegisterExport(string targetFile, string name, int position)
+        {
+            string fileKey = NormalizeFileName(targetFile);
+            if (string.IsNullOrEmpty(fileKey))
+                throw new InterpreterException("Export target file name cannot be empty.", position);
+
+            var binding = ResolveExportBinding(name, position);
+            if (!_exportsByFile.TryGetValue(fileKey, out var exports))
+            {
+                exports = new Dictionary<string, ExportedBinding>(StringComparer.Ordinal);
+                _exportsByFile[fileKey] = exports;
+            }
+
+            exports[name] = binding;
+        }
+
+        private bool TryImportExportedBinding(string name, int position)
+        {
+            string fileKey = NormalizeFileName(CurrentFileName);
+            if (!_exportsByFile.TryGetValue(fileKey, out var exports))
+                return false;
+
+            if (!exports.TryGetValue(name, out var binding))
+                return false;
+
+            if (IsNameDefined(name))
+                return true;
+
+            switch (binding.Kind)
+            {
+                case ExportedBindingKind.Value:
+                    _variables.Declare(name, Mutability.ConstConst, binding.Value, 1, LifetimeSpecifier.None, _currentStatementIndex);
+                    OnVariableMutated(name);
+                    return true;
+                case ExportedBindingKind.Function:
+                    if (binding.Function == null)
+                        return false;
+                    _functions[name] = binding.Function;
+                    return true;
+                case ExportedBindingKind.Class:
+                    if (binding.Class == null)
+                        return false;
+                    _classes[name] = binding.Class;
+                    _classInstances.Remove(name);
+                    ClearFieldHistoryForClass(name);
+                    return true;
+            }
+
+            return false;
         }
 
         private void DebugPrint(Expression expr, Value value)

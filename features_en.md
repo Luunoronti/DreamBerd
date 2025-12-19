@@ -9,7 +9,7 @@ Legend:
 - ✅ = implemented
 - 🟡 = partial / different from the spec
 - ❌ = missing
-- Progress snapshot (weighted: partial = 0.5): 57 ✅, 5 🟡, 25 ❌ → ~68% coverage.
+- Progress snapshot (weighted: partial = 0.5): 60 ✅, 5 🟡, 22 ❌ → ~72% coverage.
 
 ---
 
@@ -147,9 +147,9 @@ Legend:
 - ❌ `await next score` and the whole async/await model from the README.
 
 ### File structure / import/export
-- ❌ File separator via `=====` inside a single file.
-- ❌ Naming files via `======= add.gom =======`.
-- ❌ `export ... to "..."!` and `import ...!`.
+- ✅ File separator via `=====` inside a single file.
+- ✅ Naming files via `======= add.gom =======`.
+- ✅ `export ... to "..."!` and `import ...!`.
 
 ### OOP / classes
 - ✅ `Name is a class { ... }` with the “one class = one instance” rule (constructor runs on first touch).

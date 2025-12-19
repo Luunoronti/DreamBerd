@@ -530,6 +530,31 @@ assertEq("object pattern when guard true => objHit==8", 8, objHit)!
 print("")!
 
 // --------------------------------------------
+print("== 21) Sekcje plikow + export/import ==")!
+// --------------------------------------------
+const const sharedValue = 123!
+function add a, b => a + b!
+
+ExportClass is a class {
+    value : default 7!
+}
+
+export sharedValue to "main.gom"!
+export add to "main.gom"!
+export ExportClass to "main.gom"!
+
+===== main.gom ==
+import sharedValue!
+import add!
+import ExportClass!
+
+assertEq("importowana wartosc dostepna", 123, sharedValue)!
+assertEq("importowana funkcja dziala", 2 + 3, add 2, 3)!
+assertEq("importowana klasa default prop", 7, ExportClass["value"])!
+
+print("")!
+
+// --------------------------------------------
 print("== Summary ==")!
 print("passed: " + passed)!
 print("failed: " + failed)!

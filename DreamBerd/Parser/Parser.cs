@@ -444,6 +444,24 @@ namespace DreamberdInterpreter
                 return ParseWhenStatement(pos);
             }
 
+            if (Check(TokenType.Identifier))
+            {
+                string lex = Peek().Lexeme;
+                if (string.Equals(lex, "import", StringComparison.Ordinal) && IsNameTokenType(PeekType(1)))
+                {
+                    int pos = Peek().Position;
+                    Advance();
+                    return ParseImportStatement(pos);
+                }
+
+                if (string.Equals(lex, "export", StringComparison.Ordinal) && IsNameTokenType(PeekType(1)))
+                {
+                    int pos = Peek().Position;
+                    Advance();
+                    return ParseExportStatement(pos);
+                }
+            }
+
             if (TryParseUpdateStatement(out var updateStmt))
                 return updateStmt;
 
@@ -644,6 +662,32 @@ namespace DreamberdInterpreter
             _ = isDebug;
 
             return new ReturnStatement(expr, position);
+        }
+
+        private Statement ParseImportStatement(int position)
+        {
+            Token nameTok = ConsumeNameToken("Expected name after 'import'.");
+            string name = TokenToName(nameTok);
+            ParseTerminator();
+            return new ImportStatement(name, position);
+        }
+
+        private Statement ParseExportStatement(int position)
+        {
+            Token nameTok = ConsumeNameToken("Expected name after 'export'.");
+            string name = TokenToName(nameTok);
+
+            if (!Check(TokenType.Identifier) || !string.Equals(Peek().Lexeme, "to", StringComparison.Ordinal))
+                Fatal(Peek(), "Expected 'to' after export name.");
+            Advance();
+
+            if (!IsNameTokenType(Peek().Type))
+                Fatal(Peek(), "Expected file name after 'to'.");
+            Token fileTok = Advance();
+            string fileName = TokenToName(fileTok);
+
+            ParseTerminator();
+            return new ExportStatement(name, fileName, position);
         }
 
         private Statement ParseVariableDeclaration()

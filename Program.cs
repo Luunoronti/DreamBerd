@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 
 namespace DreamberdInterpreter
@@ -21,7 +23,12 @@ namespace DreamberdInterpreter
                 try
                 {
                     var time = Stopwatch.GetTimestamp();
-                    RunSource(source, evaluator);
+                    var defaultName = Path.GetFileName(path) ?? "main.gom";
+                    if (!RunSource(source, evaluator, defaultName))
+                    {
+                        Environment.ExitCode = 1;
+                        return;
+                    }
 
                     Console.ForegroundColor = ConsoleColor.DarkGray;
 
@@ -81,13 +88,118 @@ namespace DreamberdInterpreter
         }
 
 
-        private static void RunSource(string source, Evaluator evaluator)
+        private sealed record FileSection(string Name, string Source);
+
+        private static bool RunSource(string source, Evaluator evaluator, string defaultName)
+        {
+            var sections = SplitSourceIntoFiles(source, defaultName);
+            foreach (var section in sections)
+            {
+                evaluator.CurrentFileName = section.Name;
+                try
+                {
+                    RunSection(section.Source, evaluator);
+                }
+                catch (InterpreterException ex)
+                {
+                    PrintInterpreterError(ex, section.Source, section.Name);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static void RunSection(string source, Evaluator evaluator)
         {
             var lexer = new Lexer(source);
             var tokens = lexer.Tokenize();
             var parser = new Parser(tokens, source);
             var program = parser.ParseProgram();
             evaluator.ExecuteProgram(program);
+        }
+
+        private static IReadOnlyList<FileSection> SplitSourceIntoFiles(string source, string defaultName)
+        {
+            var sections = new List<FileSection>();
+            var current = new StringBuilder();
+            string currentName = string.IsNullOrWhiteSpace(defaultName) ? "main.gom" : defaultName;
+            int autoIndex = 1;
+            bool hadContent = false;
+
+            using var reader = new StringReader(source ?? string.Empty);
+            string? line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                if (TryParseFileSeparator(line, out var newName))
+                {
+                    if (hadContent || current.Length > 0)
+                    {
+                        sections.Add(new FileSection(currentName, current.ToString()));
+                        current.Clear();
+                        hadContent = false;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(newName))
+                    {
+                        currentName = newName!;
+                    }
+                    else
+                    {
+                        currentName = $"file-{autoIndex}.gom";
+                        autoIndex++;
+                    }
+
+                    continue;
+                }
+
+                current.AppendLine(line);
+                hadContent = true;
+            }
+
+            if (current.Length > 0 || sections.Count == 0)
+            {
+                sections.Add(new FileSection(currentName, current.ToString()));
+            }
+
+            return sections;
+        }
+
+        private static bool TryParseFileSeparator(string line, out string? name)
+        {
+            name = null;
+            if (string.IsNullOrWhiteSpace(line))
+                return false;
+
+            string trimmed = line.Trim();
+            int len = trimmed.Length;
+            if (len < 5 || trimmed[0] != '=')
+                return false;
+
+            int leading = 0;
+            while (leading < len && trimmed[leading] == '=')
+                leading++;
+
+            if (leading < 5)
+                return false;
+
+            string rest = trimmed.Substring(leading).Trim();
+            if (rest.Length == 0)
+                return true;
+
+            int trailing = 0;
+            int idx = rest.Length - 1;
+            while (idx >= 0 && rest[idx] == '=')
+            {
+                trailing++;
+                idx--;
+            }
+
+            if (trailing >= 2)
+                rest = rest.Substring(0, rest.Length - trailing).Trim();
+
+            name = rest.Length > 0 ? rest : null;
+            return true;
         }
 
         private static void RunRepl(Evaluator evaluator)
@@ -117,11 +229,7 @@ namespace DreamberdInterpreter
 
                     try
                     {
-                        RunSource(source, evaluator);
-                    }
-                    catch (InterpreterException ex)
-                    {
-                        PrintInterpreterError(ex, source, "<repl>");
+                        RunSource(source, evaluator, "<repl>");
                     }
                     catch (Exception ex)
                     {

@@ -9,7 +9,7 @@ Legenda:
 - ✅ = zaimplementowane
 - 🟡 = częściowo / inaczej niż w specyfikacji
 - ❌ = brak
-- Migawka progresu (ważenie: partial = 0.5): 57 ✅, 5 🟡, 25 ❌ → ok. 68% pokrycia.
+- Migawka progresu (ważenie: partial = 0.5): 60 ✅, 5 🟡, 22 ❌ → ok. 72% pokrycia.
 
 ---
 
@@ -147,9 +147,9 @@ Legenda:
 - ❌ `await next score` i w ogóle async/await model z README.
 
 ### Struktura plików / import/export
-- ❌ Separator plików przez `=====` w jednym pliku.
-- ❌ Nadawanie nazw plikom `======= add.gom =======`.
-- ❌ `export ... to "..."!` i `import ...!`.
+- ✅ Separator plików przez `=====` w jednym pliku.
+- ✅ Nadawanie nazw plikom `======= add.gom =======`.
+- ✅ `export ... to "..."!` i `import ...!`.
 
 ### OOP / klasy
 - ✅ `Nazwa is a class { ... }` z zasadą „jedna klasa = jedna instancja” (konstruktor na pierwszy dostęp).

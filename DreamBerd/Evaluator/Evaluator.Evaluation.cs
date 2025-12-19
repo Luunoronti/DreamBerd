@@ -221,6 +221,19 @@ namespace DreamberdInterpreter
                         return Value.Null;
                     }
 
+                case ImportStatement ims:
+                    {
+                        if (!TryImportExportedBinding(ims.Name, ims.Position))
+                            throw new InterpreterException($"Nothing exported as '{ims.Name}' for file '{CurrentFileName}'.", ims.Position);
+                        return Value.Null;
+                    }
+
+                case ExportStatement exs:
+                    {
+                        RegisterExport(exs.TargetFile, exs.Name, exs.Position);
+                        return Value.Null;
+                    }
+
                 case WhenStatement ws:
                     {
                         var deps = CollectConditionDependencies(ws.Condition);

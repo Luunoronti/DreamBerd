@@ -165,6 +165,30 @@ namespace DreamberdInterpreter
         }
     }
 
+    public sealed class ImportStatement : Statement
+    {
+        public string Name { get; }
+
+        public ImportStatement(string name, int position)
+            : base(position)
+        {
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+        }
+    }
+
+    public sealed class ExportStatement : Statement
+    {
+        public string Name { get; }
+        public string TargetFile { get; }
+
+        public ExportStatement(string name, string targetFile, int position)
+            : base(position)
+        {
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+            TargetFile = targetFile ?? throw new ArgumentNullException(nameof(targetFile));
+        }
+    }
+
     public sealed class WhenStatement : Statement
     {
         public Expression Condition { get; }
