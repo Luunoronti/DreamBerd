@@ -12,7 +12,9 @@ namespace DreamberdInterpreter
         Boolean,
         Null,
         Undefined,
-        Array
+        Array,
+        Object,
+        Method
     }
 
     /// <summary>
@@ -47,47 +49,65 @@ namespace DreamberdInterpreter
         {
             get;
         }
+        public ClassInstance? Object
+        {
+            get;
+        }
+        public BoundMethod? Method
+        {
+            get;
+        }
 
         private Value(
             ValueKind kind,
             double number,
             string? str,
             BooleanState boolVal,
-            IReadOnlyDictionary<double, Value>? array)
+            IReadOnlyDictionary<double, Value>? array,
+            ClassInstance? obj,
+            BoundMethod? method)
         {
             Kind = kind;
             Number = number;
             String = str;
             Bool = boolVal;
             Array = array;
+            Object = obj;
+            Method = method;
         }
 
         public static Value FromNumber(double number) =>
-            new Value(ValueKind.Number, number, null, BooleanState.False, null);
+            new Value(ValueKind.Number, number, null, BooleanState.False, null, null, null);
 
         public static Value FromString(string str) =>
-            new Value(ValueKind.String, 0, str ?? string.Empty, BooleanState.False, null);
+            new Value(ValueKind.String, 0, str ?? string.Empty, BooleanState.False, null, null, null);
 
         public static Value FromBoolean(bool b) =>
-            new Value(ValueKind.Boolean, 0, null, b ? BooleanState.True : BooleanState.False, null);
+            new Value(ValueKind.Boolean, 0, null, b ? BooleanState.True : BooleanState.False, null, null, null);
 
         public static Value FromBooleanState(BooleanState state) =>
-            new Value(ValueKind.Boolean, 0, null, state, null);
+            new Value(ValueKind.Boolean, 0, null, state, null, null, null);
 
         /// <summary>
         /// Literal 'maybe'.
         /// </summary>
         public static Value Maybe =>
-            new Value(ValueKind.Boolean, 0, null, BooleanState.Maybe, null);
+            new Value(ValueKind.Boolean, 0, null, BooleanState.Maybe, null, null, null);
 
         public static Value FromArray(IReadOnlyDictionary<double, Value> array) =>
-            new Value(ValueKind.Array, 0, null, BooleanState.False, array);
+            new Value(ValueKind.Array, 0, null, BooleanState.False, array, null, null);
+
+        public static Value FromObject(ClassInstance instance) =>
+            new Value(ValueKind.Object, 0, null, BooleanState.False, null, instance, null);
+
+        public static Value FromMethod(BoundMethod method) =>
+            new Value(ValueKind.Method, 0, null, BooleanState.False, null, null, method);
 
         public static Value Null =>
-            new Value(ValueKind.Null, 0, null, BooleanState.False, null);
+            new Value(ValueKind.Null, 0, null, BooleanState.False, null, null, null);
 
         public static Value Undefined =>
-            new Value(ValueKind.Undefined, 0, null, BooleanState.False, null);
+            new Value(ValueKind.Undefined, 0, null, BooleanState.False, null, null, null);
 
         public double ToNumber()
         {
@@ -124,6 +144,8 @@ namespace DreamberdInterpreter
                 ValueKind.Number => Math.Abs(Number) > double.Epsilon,
                 ValueKind.String => !string.IsNullOrEmpty(String),
                 ValueKind.Array => Array != null && Array.Count > 0,
+                ValueKind.Object => Object != null,
+                ValueKind.Method => Method != null,
                 _ => false
             };
         }
@@ -141,6 +163,8 @@ namespace DreamberdInterpreter
                 ValueKind.Null => true,
                 ValueKind.Undefined => true,
                 ValueKind.Array => ReferenceEquals(Array, other.Array),
+                ValueKind.Object => ReferenceEquals(Object, other.Object),
+                ValueKind.Method => ReferenceEquals(Method, other.Method),
                 _ => false
             };
         }
@@ -196,6 +220,8 @@ namespace DreamberdInterpreter
                 ValueKind.Null => "null",
                 ValueKind.Undefined => "undefined",
                 ValueKind.Array => "[" + (Array == null ? "" : string.Join(", ", ArrayValuesInIndexOrder())) + "]",
+                ValueKind.Object => Object == null ? "[object]" : $"[{Object.Name} instance]",
+                ValueKind.Method => Method == null ? "[method]" : $"[{Method.Target.Name}.{Method.Name}]",
                 _ => ""
             };
         }

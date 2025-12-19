@@ -17,6 +17,9 @@ namespace DreamberdInterpreter
         If,
         Else,
         Idk,
+        Class,
+        Is,
+        A,
 
         Return,
         While,

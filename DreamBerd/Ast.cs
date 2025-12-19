@@ -210,6 +210,19 @@ namespace DreamberdInterpreter
         }
     }
 
+    public sealed class ClassDeclarationStatement : Statement
+    {
+        public string Name { get; }
+        public IReadOnlyList<FunctionDeclarationStatement> Methods { get; }
+
+        public ClassDeclarationStatement(string name, IReadOnlyList<FunctionDeclarationStatement> methods, int position)
+            : base(position)
+        {
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+            Methods = methods ?? throw new ArgumentNullException(nameof(methods));
+        }
+    }
+
     public sealed class IfStatement : Statement
     {
         public Expression Condition { get; }

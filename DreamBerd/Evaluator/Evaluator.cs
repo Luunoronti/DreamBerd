@@ -34,6 +34,9 @@ namespace DreamberdInterpreter
         private readonly Queue<string> _whenMutationQueue = new Queue<string>();
         private bool _dispatchingWhen;
         private readonly Dictionary<string, FunctionDefinition> _functions = new Dictionary<string, FunctionDefinition>(StringComparer.Ordinal);
+        private readonly Dictionary<string, ClassDefinition> _classes = new Dictionary<string, ClassDefinition>(StringComparer.Ordinal);
+        private readonly Dictionary<string, ClassInstance> _classInstances = new Dictionary<string, ClassInstance>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldHistory> _fieldHistory = new Dictionary<string, FieldHistory>(StringComparer.Ordinal);
 
         private readonly Stack<CallFrame> _callStack = new Stack<CallFrame>();
 
@@ -237,6 +240,22 @@ namespace DreamberdInterpreter
             }
         }
 
+        private void ClearFieldHistoryForClass(string className)
+        {
+            if (string.IsNullOrEmpty(className))
+                return;
+
+            var toRemove = new List<string>();
+            foreach (var key in _fieldHistory.Keys)
+            {
+                if (key.StartsWith(className + "::", StringComparison.Ordinal))
+                    toRemove.Add(key);
+            }
+
+            foreach (var k in toRemove)
+                _fieldHistory.Remove(k);
+        }
+
         private static bool TryToInt(Value v, out int i)
         {
             i = 0;
@@ -270,7 +289,7 @@ namespace DreamberdInterpreter
             return true;
         }
 
-        private Value InvokeUserFunction(string name, FunctionDefinition def, IReadOnlyList<Expression> arguments)
+        private Value InvokeUserFunction(string name, FunctionDefinition def, IReadOnlyList<Expression> arguments, BoundMethod? boundThis = null)
         {
             var frame = new CallFrame();
 
@@ -284,6 +303,11 @@ namespace DreamberdInterpreter
                     : Value.Undefined;
 
                 frame.Locals[paramName] = argValue;
+            }
+
+            if (boundThis != null)
+            {
+                frame.Locals["source"] = Value.FromObject(boundThis.Target);
             }
 
             _callStack.Push(frame);
@@ -307,22 +331,152 @@ namespace DreamberdInterpreter
             }
         }
 
+        private Value InvokeBoundMethod(BoundMethod method, IReadOnlyList<Expression> arguments)
+        {
+            return InvokeUserFunction(method.Name, method.Definition, arguments, method);
+        }
+
+        private ClassInstance GetOrCreateInstance(ClassDefinition def)
+        {
+            if (_classInstances.TryGetValue(def.Name, out var existing))
+                return existing;
+
+            var instance = new ClassInstance(def);
+            _classInstances[def.Name] = instance;
+            InvokeConstructorIfNeeded(instance);
+            return instance;
+        }
+
+        private void InvokeConstructorIfNeeded(ClassInstance instance)
+        {
+            if (instance.Initialized)
+                return;
+
+            instance.Initialized = true;
+
+            if (instance.Definition.Methods.TryGetValue("constructor", out var ctor))
+            {
+                InvokeBoundMethod(new BoundMethod(instance, "constructor", ctor), Array.Empty<Expression>());
+            }
+        }
+
         private Value EvaluateIndex(IndexExpression indexExpr)
         {
             Value targetVal = EvaluateExpression(indexExpr.Target);
 
-            if (targetVal.Kind != ValueKind.Array || targetVal.Array == null)
-                throw new InterpreterException("Indexing is only supported on arrays.", indexExpr.Position);
-
-            Value indexVal = EvaluateExpression(indexExpr.Index);
-            double index = ToNumberAt(indexVal, indexExpr.Index.Position);
-
-            if (!targetVal.Array.TryGetValue(index, out var element))
+            if (targetVal.Kind == ValueKind.Array && targetVal.Array != null)
             {
-                return Value.Undefined;
+                Value indexVal = EvaluateExpression(indexExpr.Index);
+                double index = ToNumberAt(indexVal, indexExpr.Index.Position);
+
+                if (!targetVal.Array.TryGetValue(index, out var element))
+                {
+                    return Value.Undefined;
+                }
+
+                return element;
             }
 
-            return element;
+            if (targetVal.Kind == ValueKind.Object && targetVal.Object != null)
+            {
+                Value indexVal = EvaluateExpression(indexExpr.Index);
+                string key = ToFieldKey(indexVal);
+                return GetObjectMember(targetVal.Object, key);
+            }
+
+            throw new InterpreterException("Indexing is only supported on arrays or class instances.", indexExpr.Position);
+        }
+
+        private static string ToFieldKey(Value indexVal)
+        {
+            return indexVal.Kind switch
+            {
+                ValueKind.String => indexVal.String ?? string.Empty,
+                ValueKind.Number => indexVal.Number.ToString("G", CultureInfo.InvariantCulture),
+                ValueKind.Boolean => indexVal.ToString(),
+                ValueKind.Null => "null",
+                ValueKind.Undefined => "undefined",
+                _ => indexVal.ToString()
+            };
+        }
+
+        private Value GetObjectMember(ClassInstance instance, string fieldKey)
+        {
+            if (instance.Definition.Methods.TryGetValue(fieldKey, out var methodDef))
+            {
+                return Value.FromMethod(new BoundMethod(instance, fieldKey, methodDef));
+            }
+
+            if (instance.Fields.TryGetValue(fieldKey, out var value))
+                return value;
+
+            return Value.Undefined;
+        }
+
+        private FieldHistory GetOrCreateFieldHistory(ClassInstance instance, string fieldKey)
+        {
+            string key = $"{instance.Name}::{fieldKey}";
+            if (!_fieldHistory.TryGetValue(key, out var hist))
+            {
+                hist = new FieldHistory();
+                _fieldHistory[key] = hist;
+            }
+            return hist;
+        }
+
+        private void AssignObjectField(ClassInstance instance, string fieldKey, Value newValue, string? aliasName, bool notifyAlias)
+        {
+            Value current = instance.Fields.TryGetValue(fieldKey, out var existing) ? existing : Value.Undefined;
+            var history = GetOrCreateFieldHistory(instance, fieldKey);
+
+            if (history.Values.Count == 0)
+            {
+                history.Values.Add(current);
+                history.Index = 0;
+            }
+
+            if (history.Values.Count > 0)
+            {
+                var currentHistVal = history.Values[history.Index];
+                if (!currentHistVal.StrictEquals(newValue))
+                {
+                    if (history.Index < history.Values.Count - 1)
+                        history.Values.RemoveRange(history.Index + 1, history.Values.Count - history.Index - 1);
+
+                    history.Values.Add(newValue);
+                    history.Index = history.Values.Count - 1;
+                }
+            }
+
+            instance.Fields[fieldKey] = newValue;
+
+            OnVariableMutated(instance.Name);
+
+            if (notifyAlias && !string.IsNullOrEmpty(aliasName) && !string.Equals(aliasName, instance.Name, StringComparison.Ordinal))
+                OnVariableMutated(aliasName);
+        }
+
+        private bool TryDeleteIndexTarget(IndexExpression idx)
+        {
+            Value container = EvaluateExpression(idx.Target);
+            if (container.Kind == ValueKind.Object && container.Object != null)
+            {
+                string key = ToFieldKey(EvaluateExpression(idx.Index));
+                var instance = container.Object;
+                bool removed = instance.Fields.Remove(key);
+                bool removedHistory = _fieldHistory.Remove($"{instance.Name}::{key}");
+
+                if (removed || removedHistory)
+                {
+                    OnVariableMutated(instance.Name);
+                    if (TryGetName(idx.Target, out var alias) && !string.Equals(alias, instance.Name, StringComparison.Ordinal))
+                        OnVariableMutated(alias);
+                }
+
+                return removed;
+            }
+
+            return false;
         }
 
         private Value EvaluatePostfixUpdate(PostfixUpdateExpression update)

@@ -3,7 +3,7 @@ namespace DreamberdInterpreter
 {
     public sealed partial class Evaluator
     {
-        private sealed class FunctionDefinition
+        internal sealed class FunctionDefinition
         {
             public IReadOnlyList<string> Parameters
             {

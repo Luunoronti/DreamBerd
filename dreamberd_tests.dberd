@@ -411,6 +411,47 @@ assertEq('var var "" = 123! ; "" => 123', 123, "")!
 "" :+ 1!
 assertEq('"" :+ 1! => 124', 124, "")!
 
+// --------------------------------------------
+print("== 18) Klasy singleton + pola + historia ==")!
+// --------------------------------------------
+MyClass is a class {
+    function set x => { source["val"] = x! }
+    function add x => { source["val"] :+ x! }
+    function read x => return source["val"]!
+}
+
+assertEq("MyClass['val'] start => undefined", undefined, MyClass["val"])!
+MyClass["val"] = 12!
+assertEq("MyClass['val'] = 12! => 12", 12, MyClass["val"])!
+
+var var alias = MyClass!
+alias["val"] :+ 2!
+assertEq("alias['val'] :+ 2! => MyClass['val'] == 14", 14, MyClass["val"])!
+
+alias["set"] 10!
+assertEq("alias['set'] 10! => MyClass['val'] == 10", 10, MyClass["val"])!
+
+alias["add"] 1!
+assertEq("alias['add'] 1! => MyClass['val'] == 11", 11, MyClass["val"])!
+
+assertEq("history(MyClass['val'])[-1] => undefined", undefined, history(MyClass["val"])[-1])!
+previous(MyClass["val"])!
+assertEq("previous(MyClass['val']) => 10", 10, MyClass["val"])!
+next(MyClass["val"])!
+assertEq("next(MyClass['val']) => 11", 11, MyClass["val"])!
+
+Ctor is a class {
+    function constructor x => { source["init"] = 1! }
+    function add x => { source["init"] :+ x! }
+}
+
+assertEq("Ctor constructor przy 1. dostępie: Ctor['init'] => 1", 1, Ctor["init"])!
+Ctor["add"] 3!
+assertEq("Ctor['add'] 3! => Ctor['init'] == 4", 4, Ctor["init"])!
+var var ctorAlias = Ctor!
+ctorAlias["add"] 1!
+assertEq("Ctor singleton przez alias: Ctor['init'] == 5", 5.0, Ctor["init"])!
+
 print("")!
 
 // --------------------------------------------

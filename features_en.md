@@ -151,9 +151,9 @@ Legend:
 - ❌ `export ... to "..."!` and `import ...!`.
 
 ### OOP / classes
-- ❌ `class` + rule “only one instance of a class”.
-- ❌ `new`, fields, methods, `.`.
-- ❌ `className`.
+- ✅ `Name is a class { ... }` with the “one class = one instance” rule (constructor runs on first touch).
+- ✅ Indexed fields and methods (`obj["field"]`, `obj["method"] args`) with `source` as the baked-in `this`.
+- ✅ Field lifecycle: history/previous/next/when work on fields, delete drops the field; singleton is shared across aliases.
 
 ### Time
 - ❌ `Date.now()` and the ability to change time via `Date.now() -= ...`.

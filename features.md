@@ -151,9 +151,9 @@ Legenda:
 - ❌ `export ... to "..."!` i `import ...!`.
 
 ### OOP / klasy
-- ❌ `class` + reguła „tylko jedna instancja klasy”.
-- ❌ `new`, pola, metody, `.`.
-- ❌ `className`.
+- ✅ `Nazwa is a class { ... }` z zasadą „jedna klasa = jedna instancja” (konstruktor na pierwszy dostęp).
+- ✅ Indeksowane pola i metody (`obj["pole"]`, `obj["metoda"] args`) z wbudowanym `source` jako `this`.
+- ✅ Życie pól: history/previous/next/when działa na polach, delete usuwa pole; singleton jest współdzielony przez aliasy.
 
 ### Czas
 - ❌ `Date.now()` i możliwość zmiany czasu przez `Date.now() -= ...`.

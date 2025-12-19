@@ -198,6 +198,13 @@ namespace DreamberdInterpreter
 
                 case DeleteStatement ds:
                     {
+                        if (ds.Target is IndexExpression idx && TryDeleteIndexTarget(idx))
+                        {
+                            if (ds.IsDebug)
+                                Console.WriteLine("[DEBUG] delete {0}", "index");
+                            return Value.Null;
+                        }
+
                         Value value = EvaluateExpression(ds.Target);
                         MarkDeleted(value, ds.Position);
                         if (ds.IsDebug)
@@ -232,6 +239,21 @@ namespace DreamberdInterpreter
                     {
                         var def = new FunctionDefinition(fds.Parameters, fds.Body);
                         _functions[fds.Name] = def;
+                        return Value.Null;
+                    }
+
+                case ClassDeclarationStatement cds:
+                    {
+                        var methods = new Dictionary<string, FunctionDefinition>(StringComparer.Ordinal);
+                        foreach (var m in cds.Methods)
+                        {
+                            methods[m.Name] = new FunctionDefinition(m.Parameters, m.Body);
+                        }
+
+                        var def = new ClassDefinition(cds.Name, methods);
+                        _classes[cds.Name] = def;
+                        _classInstances.Remove(cds.Name);
+                        ClearFieldHistoryForClass(cds.Name);
                         return Value.Null;
                     }
 
@@ -381,6 +403,12 @@ case TryAgainStatement tas:
         {
             if (TryResolveName(ident.Name, out var value))
                 return value;
+
+            if (_classes.TryGetValue(ident.Name, out var classDef))
+            {
+                var instance = GetOrCreateInstance(classDef);
+                return Value.FromObject(instance);
+            }
 
             // fallback: string z nazwą
             return Value.FromString(ident.Name);
@@ -599,25 +627,37 @@ case TryAgainStatement tas:
         {
             Value targetVal = EvaluateExpression(ia.Target);
 
-            if (targetVal.Kind != ValueKind.Array || targetVal.Array == null)
-                throw new InterpreterException("Index assignment is only supported on arrays.", ia.Position);
-
-            Value indexVal = EvaluateExpression(ia.Index);
-            double index = ToNumberAt(indexVal, ia.Index.Position);
-
-            var dict = new Dictionary<double, Value>(targetVal.Array);
-            Value newValue = EvaluateExpression(ia.ValueExpression);
-            dict[index] = newValue;
-
-            if (ia.Target is IdentifierExpression ident &&
-                !_constStore.TryGet(ident.Name, out _))
+            if (targetVal.Kind == ValueKind.Array && targetVal.Array != null)
             {
-                Value newArrayValue = Value.FromArray(dict);
-                _variables.Assign(ident.Name, newArrayValue, _currentStatementIndex);
-                OnVariableMutated(ident.Name);
+                Value indexVal = EvaluateExpression(ia.Index);
+                double index = ToNumberAt(indexVal, ia.Index.Position);
+
+                var dict = new Dictionary<double, Value>(targetVal.Array);
+                Value newValue = EvaluateExpression(ia.ValueExpression);
+                dict[index] = newValue;
+
+                if (ia.Target is IdentifierExpression ident &&
+                    !_constStore.TryGet(ident.Name, out _))
+                {
+                    Value newArrayValue = Value.FromArray(dict);
+                    _variables.Assign(ident.Name, newArrayValue, _currentStatementIndex);
+                    OnVariableMutated(ident.Name);
+                }
+
+                return newValue;
             }
 
-            return newValue;
+            if (targetVal.Kind == ValueKind.Object && targetVal.Object != null)
+            {
+                Value indexVal = EvaluateExpression(ia.Index);
+                string key = ToFieldKey(indexVal);
+                Value newValue = EvaluateExpression(ia.ValueExpression);
+                string? alias = TryGetName(ia.Target, out var nm) ? nm : null;
+                AssignObjectField(targetVal.Object, key, newValue, alias, notifyAlias: true);
+                return newValue;
+            }
+
+            throw new InterpreterException("Index assignment is only supported on arrays or class instances.", ia.Position);
         }
 
         private Value EvaluateUpdate(UpdateStatement us)
@@ -945,38 +985,57 @@ case TryAgainStatement tas:
             if (target is IndexExpression idx)
             {
                 Value container = EvaluateExpression(idx.Target);
-                if (container.Kind != ValueKind.Array || container.Array == null)
-                    throw new InterpreterException("Index update is only supported on arrays.", position);
-
-                Value indexVal = EvaluateExpression(idx.Index);
-                double index = ToNumberAt(indexVal, idx.Index.Position);
-
-                var dict = new Dictionary<double, Value>(container.Array);
-                mutatedName = TryGetName(idx.Target, out var idxName) ? idxName : null;
-
-                assign = v =>
+                if (container.Kind == ValueKind.Array && container.Array != null)
                 {
-                    dict[index] = v;
+                    Value indexVal = EvaluateExpression(idx.Index);
+                    double index = ToNumberAt(indexVal, idx.Index.Position);
 
-                    if (TryGetName(idx.Target, out var arrName) && !_constStore.TryGet(arrName, out _))
+                    var dict = new Dictionary<double, Value>(container.Array);
+                    mutatedName = TryGetName(idx.Target, out var idxName) ? idxName : null;
+
+                    assign = v =>
                     {
-                        Value newArray = Value.FromArray(dict);
+                        dict[index] = v;
 
-                        if (_callStack.Count > 0)
+                        if (TryGetName(idx.Target, out var arrName) && !_constStore.TryGet(arrName, out _))
                         {
-                            var frame = _callStack.Peek();
-                            if (frame.Locals.ContainsKey(arrName))
+                            Value newArray = Value.FromArray(dict);
+
+                            if (_callStack.Count > 0)
                             {
-                                frame.Locals[arrName] = newArray;
-                                return;
+                                var frame = _callStack.Peek();
+                                if (frame.Locals.ContainsKey(arrName))
+                                {
+                                    frame.Locals[arrName] = newArray;
+                                    return;
+                                }
                             }
+
+                            _variables.Assign(arrName, newArray, _currentStatementIndex);
                         }
+                    };
 
-                        _variables.Assign(arrName, newArray, _currentStatementIndex);
-                    }
-                };
+                    return dict.TryGetValue(index, out var currentElement) ? currentElement : Value.Undefined;
+                }
 
-                return dict.TryGetValue(index, out var currentElement) ? currentElement : Value.Undefined;
+                if (container.Kind == ValueKind.Object && container.Object != null)
+                {
+                    var instance = container.Object;
+                    Value indexVal = EvaluateExpression(idx.Index);
+                    string fieldKey = ToFieldKey(indexVal);
+
+                    mutatedName = TryGetName(idx.Target, out var idxName) ? idxName : null;
+                    string? aliasForAssign = mutatedName;
+
+                    assign = v =>
+                    {
+                        AssignObjectField(instance, fieldKey, v, aliasForAssign, notifyAlias: false);
+                    };
+
+                    return instance.Fields.TryGetValue(fieldKey, out var currentField) ? currentField : Value.Undefined;
+                }
+
+                throw new InterpreterException("Index update is only supported on arrays or class instances.", position);
             }
 
             throw new InterpreterException("Update target must be a variable or array element.", position);
@@ -1031,6 +1090,13 @@ case TryAgainStatement tas:
                 }
 
             }
+
+            Value calleeValue = EvaluateExpression(call.Callee);
+            if (calleeValue.Kind == ValueKind.Method && calleeValue.Method != null)
+            {
+                return InvokeBoundMethod(calleeValue.Method, call.Arguments);
+            }
+
             string calleeName = TryGetCalleeName(call.Callee, out var idName) ? idName : call.Callee.GetType().Name;
             throw new InterpreterException($"Invalid function call on '{calleeName}'.", call.Position);
         }
@@ -1055,51 +1121,240 @@ case TryAgainStatement tas:
         }
         private Value EvaluatePreviousCall(CallExpression call)
         {
-            if (call.Arguments.Count != 1 || !TryGetName(call.Arguments[0], out var targetName))
-                throw new InterpreterException("previous(x) expects a single identifier argument.", call.Position);
+            if (call.Arguments.Count != 1)
+                throw new InterpreterException("previous(x) expects a single identifier or field argument.", call.Position);
 
-            if (!_variables.TryPrevious(targetName, out var newVal, out var changed))
-                return Value.Undefined;
+            var arg = call.Arguments[0];
 
-            if (changed)
-                OnVariableMutated(targetName);
+            if (TryGetName(arg, out var targetName))
+            {
+                if (!_variables.TryPrevious(targetName, out var newVal, out var changed))
+                    return Value.Undefined;
 
-            return newVal;
+                if (changed)
+                    OnVariableMutated(targetName);
+
+                return newVal;
+            }
+
+            if (TryGetFieldContext(arg, out var instance, out var fieldKey, out var alias))
+            {
+                if (!TryPreviousField(instance, fieldKey, out var newVal, out var changed))
+                    return Value.Undefined;
+
+                if (changed)
+                {
+                    OnVariableMutated(instance.Name);
+                    if (!string.IsNullOrEmpty(alias) && alias != instance.Name)
+                        OnVariableMutated(alias);
+                }
+
+                return newVal;
+            }
+
+            throw new InterpreterException("previous(x) expects a single identifier or field argument.", call.Position);
         }
 
         private Value EvaluateNextCall(CallExpression call)
         {
-            if (call.Arguments.Count != 1 || !TryGetName(call.Arguments[0], out var targetName))
-                throw new InterpreterException("next(x) expects a single identifier argument.", call.Position);
+            if (call.Arguments.Count != 1)
+                throw new InterpreterException("next(x) expects a single identifier or field argument.", call.Position);
 
-            if (!_variables.TryNext(targetName, out var newVal, out var changed))
-                return Value.Undefined;
+            var arg = call.Arguments[0];
 
-            if (changed)
-                OnVariableMutated(targetName);
+            if (TryGetName(arg, out var targetName))
+            {
+                if (!_variables.TryNext(targetName, out var newVal, out var changed))
+                    return Value.Undefined;
 
-            return newVal;
+                if (changed)
+                    OnVariableMutated(targetName);
+
+                return newVal;
+            }
+
+            if (TryGetFieldContext(arg, out var instance, out var fieldKey, out var alias))
+            {
+                if (!TryNextField(instance, fieldKey, out var newVal, out var changed))
+                    return Value.Undefined;
+
+                if (changed)
+                {
+                    OnVariableMutated(instance.Name);
+                    if (!string.IsNullOrEmpty(alias) && alias != instance.Name)
+                        OnVariableMutated(alias);
+                }
+
+                return newVal;
+            }
+
+            throw new InterpreterException("next(x) expects a single identifier or field argument.", call.Position);
         }
 
         private Value EvaluateHistoryCall(CallExpression call)
         {
-            if (call.Arguments.Count != 1 || !TryGetName(call.Arguments[0], out var targetName))
-                throw new InterpreterException("history(x) expects a single identifier argument.", call.Position);
+            if (call.Arguments.Count != 1)
+                throw new InterpreterException("history(x) expects a single identifier or field argument.", call.Position);
 
-            if (!_variables.TryGetHistory(targetName, out var values, out var currentIndex) ||
-                values.Count == 0)
+            var arg = call.Arguments[0];
+
+            if (TryGetName(arg, out var targetName))
             {
-                return Value.FromArray(new Dictionary<double, Value>());
+                if (!_variables.TryGetHistory(targetName, out var values, out var currentIndex) ||
+                    values.Count == 0)
+                {
+                    return Value.FromArray(new Dictionary<double, Value>());
+                }
+
+                var dict = new Dictionary<double, Value>();
+                for (int i = 0; i < values.Count; i++)
+                {
+                    double idx = i - 1;       // -1, 0, 1, 2...
+                    dict[idx] = values[i];
+                }
+
+                return Value.FromArray(dict);
             }
 
-            var dict = new Dictionary<double, Value>();
-            for (int i = 0; i < values.Count; i++)
+            if (TryGetFieldContext(arg, out var instance, out var fieldKey, out _))
             {
-                double idx = i - 1;       // -1, 0, 1, 2...
-                dict[idx] = values[i];
+                if (!TryGetFieldHistory(instance, fieldKey, out var hist) || hist.Values.Count == 0)
+                    return Value.FromArray(new Dictionary<double, Value>());
+
+                var dict = new Dictionary<double, Value>();
+                for (int i = 0; i < hist.Values.Count; i++)
+                {
+                    double idx = i - 1;
+                    dict[idx] = hist.Values[i];
+                }
+
+                return Value.FromArray(dict);
             }
 
-            return Value.FromArray(dict);
+            if (arg is IndexExpression idxArg)
+            {
+                if (TryGetName(idxArg.Target, out var idxName))
+                {
+                    if (!_variables.TryGetHistory(idxName, out var values, out _) || values.Count == 0)
+                        return Value.Undefined;
+
+                    var dict = new Dictionary<double, Value>();
+                    for (int i = 0; i < values.Count; i++)
+                    {
+                        double idx = i - 1;
+                        dict[idx] = values[i];
+                    }
+
+                    double wantedIndex = ToNumberAt(EvaluateExpression(idxArg.Index), idxArg.Index.Position);
+                    return dict.TryGetValue(wantedIndex, out var element) ? element : Value.Undefined;
+                }
+
+                if (TryGetFieldContext(idxArg.Target, out var targetInstance, out var targetFieldKey, out _))
+                {
+                    if (!TryGetFieldHistory(targetInstance, targetFieldKey, out var hist) || hist.Values.Count == 0)
+                        return Value.Undefined;
+
+                    var dict = new Dictionary<double, Value>();
+                    for (int i = 0; i < hist.Values.Count; i++)
+                    {
+                        double idx = i - 1;
+                        dict[idx] = hist.Values[i];
+                    }
+
+                    double wantedIndex = ToNumberAt(EvaluateExpression(idxArg.Index), idxArg.Index.Position);
+                    return dict.TryGetValue(wantedIndex, out var element) ? element : Value.Undefined;
+                }
+            }
+
+            throw new InterpreterException("history(x) expects a single identifier or field argument.", call.Position);
+        }
+
+        private bool TryGetFieldContext(Expression expr, out ClassInstance instance, out string fieldKey, out string? aliasName)
+        {
+            instance = null!;
+            fieldKey = string.Empty;
+            aliasName = null;
+
+            if (expr is CallExpression call)
+            {
+                if (call.Callee is IndexExpression idxCallee)
+                {
+                    expr = idxCallee;
+                }
+                else if (call.Arguments.Count == 1)
+                {
+                    expr = new IndexExpression(call.Callee, call.Arguments[0], expr.Position);
+                }
+            }
+
+            if (expr is not IndexExpression idx)
+                return false;
+
+            Value targetVal = EvaluateExpression(idx.Target);
+            if (targetVal.Kind != ValueKind.Object || targetVal.Object == null)
+                return false;
+
+            Value indexVal = EvaluateExpression(idx.Index);
+            fieldKey = ToFieldKey(indexVal);
+            instance = targetVal.Object;
+            aliasName = TryGetName(idx.Target, out var nm) ? nm : null;
+            return true;
+        }
+
+        private bool TryGetFieldHistory(ClassInstance instance, string fieldKey, out FieldHistory history)
+        {
+            string key = $"{instance.Name}::{fieldKey}";
+            return _fieldHistory.TryGetValue(key, out history);
+        }
+
+        private bool TryPreviousField(ClassInstance instance, string fieldKey, out Value newValue, out bool changed)
+        {
+            newValue = Value.Undefined;
+            changed = false;
+
+            if (!TryGetFieldHistory(instance, fieldKey, out var history) || history.Values.Count == 0)
+                return false;
+
+            if (history.Index <= 0)
+            {
+                newValue = history.Values[0];
+            }
+            else
+            {
+                history.Index--;
+                newValue = history.Values[history.Index];
+            }
+
+            changed = !instance.Fields.TryGetValue(fieldKey, out var currentVal) || !currentVal.StrictEquals(newValue);
+            if (changed)
+                instance.Fields[fieldKey] = newValue;
+
+            return true;
+        }
+
+        private bool TryNextField(ClassInstance instance, string fieldKey, out Value newValue, out bool changed)
+        {
+            newValue = Value.Undefined;
+            changed = false;
+
+            if (!TryGetFieldHistory(instance, fieldKey, out var history) || history.Values.Count == 0)
+                return false;
+
+            if (history.Index >= history.Values.Count - 1)
+            {
+                newValue = history.Values[history.Values.Count - 1];
+            }
+            else
+            {
+                history.Index++;
+                newValue = history.Values[history.Index];
+            }
+
+            changed = !instance.Fields.TryGetValue(fieldKey, out var currentVal) || !currentVal.StrictEquals(newValue);
+            if (changed)
+                instance.Fields[fieldKey] = newValue;
+
+            return true;
         }
 
         private static bool TryGetName(Expression expr, out string name)

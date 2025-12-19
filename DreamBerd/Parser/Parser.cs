@@ -204,6 +204,9 @@ namespace DreamberdInterpreter
             TokenType.While => true,
             TokenType.Break => true,
             TokenType.Continue => true,
+            TokenType.Class => true,
+            TokenType.Is => true,
+            TokenType.A => true,
             _ => false
         };
 
@@ -351,6 +354,18 @@ namespace DreamberdInterpreter
                 return ParseWhileStatement(pos);
             }
 
+            if (Check(TokenType.Identifier)
+                && PeekType(1) == TokenType.Is
+                && PeekType(2) == TokenType.A
+                && PeekType(3) == TokenType.Class)
+            {
+                Token nameTok = Advance(); // class name
+                Advance(); // is
+                Advance(); // a
+                Advance(); // class
+                return ParseClassDeclaration(nameTok);
+            }
+
             if (Match(TokenType.Break))
             {
                 int pos = Previous().Position;
@@ -491,7 +506,7 @@ namespace DreamberdInterpreter
         private bool ParseTerminatorIsDebug() => ParseTerminator().IsDebug;
 
 
-        private Statement ParseFunctionDeclaration()
+        private Statement ParseFunctionDeclaration(bool declareInEnclosingScope = true)
         {
             // keyword: function / func / fun / fn / functi / f
             int funcPos = Peek().Position;
@@ -499,7 +514,10 @@ namespace DreamberdInterpreter
 
             Token nameTok = ConsumeNameToken("Expected function name.");
             string name = TokenToName(nameTok);
-            DeclareName(name); // nazwa funkcji widoczna w otaczajacym scope
+            if (declareInEnclosingScope)
+            {
+                DeclareName(name); // nazwa funkcji widoczna w otaczajacym scope
+            }
 
             PushScope(); // scope funkcji (parametry + cialo)
             try
@@ -543,6 +561,44 @@ namespace DreamberdInterpreter
             {
                 PopScope();
             }
+        }
+
+        private Statement ParseClassDeclaration(Token nameTok)
+        {
+            string name = TokenToName(nameTok);
+            int pos = nameTok.Position;
+
+            Consume(TokenType.LeftBrace, "Expected '{' after class declaration.");
+
+            // Klasa ma wlasny scope nazw podczas parsowania metod.
+            PushScope();
+            var methods = new List<FunctionDeclarationStatement>();
+            try
+            {
+                while (!Check(TokenType.RightBrace) && !IsAtEnd())
+                {
+                    if (!IsFunctionKeyword())
+                        Fatal(Peek(), "Only function declarations are allowed inside a class.");
+
+                    var methodStmt = ParseFunctionDeclaration(declareInEnclosingScope: false);
+                    if (methodStmt is FunctionDeclarationStatement funcDecl)
+                    {
+                        methods.Add(funcDecl);
+                    }
+                    else
+                    {
+                        Fatal(Peek(), "Expected function declaration inside class.");
+                    }
+                }
+
+                Consume(TokenType.RightBrace, "Expected '}' after class body.");
+            }
+            finally
+            {
+                PopScope();
+            }
+
+            return new ClassDeclarationStatement(name, methods, pos);
         }
 
         private Statement ParseReturnStatementAfterKeyword(int position)
@@ -1197,6 +1253,26 @@ namespace DreamberdInterpreter
             return spaces;
         }
 
+        private bool HasNoRealSpacesBetweenTokens(int leftIndex, int rightIndex)
+        {
+            int start = leftIndex >= 0
+                ? _tokens[leftIndex].Position + _tokens[leftIndex].Lexeme.Length
+                : 0;
+
+            int end = _tokens[rightIndex].Position;
+            if (end <= start)
+                return true;
+
+            for (int i = start; i < end && i < _source.Length; i++)
+            {
+                char c = _source[i];
+                if (c == ' ' || c == '\t')
+                    return false;
+            }
+
+            return true;
+        }
+
         private Expression ParseEquality()
         {
             Expression expr = ParseComparison();
@@ -1477,7 +1553,7 @@ Expression ParsePower()
             {
                 // Index: arr[expr] - tylko gdy '[' jest przyklejony (brak spacji / tylko nawiasy)
                 if (Check(TokenType.LeftBracket) &&
-                    CountSpacesBetweenTokens(_current - 1, _current) == 0)
+                    HasNoRealSpacesBetweenTokens(_current - 1, _current))
                 {
                     Advance(); // consume '['
                     var indexExpr = ParseAssignment();
@@ -1516,7 +1592,7 @@ Expression ParsePower()
 
                 // '[' bez odstępu po callee to index, nie argument
                 if (Peek().Type == TokenType.LeftBracket &&
-                    CountSpacesBetweenTokens(_current - 1, _current) == 0)
+                    HasNoRealSpacesBetweenTokens(_current - 1, _current))
                     return false;
 
                 var args = new List<Expression>();
