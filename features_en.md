@@ -9,7 +9,7 @@ Legend:
 - ✅ = implemented
 - 🟡 = partial / different from the spec
 - ❌ = missing
-- Progress snapshot (weighted: partial = 0.5): 62 ✅, 5 🟡, 20 ❌ → ~74% coverage.
+- Progress snapshot (weighted: partial = 0.5): 65 ✅, 7 �, 15 ❌ -> ~79% coverage.
 
 ---
 
@@ -46,6 +46,7 @@ Legend:
 - ✅ Arithmetic: `+ - * /` (division by 0 → `undefined`).
 - ✅ Comparisons: `< > <= >=`.
 - ✅ Equality: `==` (very loose / stringy), `===` (loose / numeric), `====` (strict).
+- ✅ Operator `=` as "super-loose equality" (README mentions "if you want to be much less precise").
 - ✅ Unary minus: `-x`.
 - ✅ Unary not: `;expr` (true↔false, maybe/undefined pass-through).
 - ✅ Postfix update chains `x++++--!` and power updates `x****!` (DreamBerd-style).
@@ -88,6 +89,7 @@ Legend:
   - active decl = highest priority (# of `!`), then newest
   - lifetime expiry can cause fallback to an older declaration
 - ✅ Variable history: `previous(x)`, `next(x)`, `history(x)`.
+- ✅ Keyword forms: `previous x`, `next x`, `current x` (no parentheses).
 
 ### when(...)
 - ✅ `when condition { ... }` subscribes to mutations of variables referenced in the condition (parentheses optional/ignored).
@@ -117,6 +119,8 @@ Legend:
 
 - 🟡 `const var` / `var var` “editable” semantics are not implemented (no objects, no methods like `push/pop`).
 - ✅ Naming: Unicode/emoji identifiers, keywords as names, digit-only names; empty names via `""` also work. A numeric token in an expression first tries to resolve a variable/function of that name, otherwise it stays a literal.
+- � Zero+ quote strings (0-quote falls back to identifier if defined).
+- � String interpolation is minimal (basic `{name}` / `$name` only; no currency variants).
 - 🟡 "Number names": English words (`zero`..`nineteen`, `twenty`..`ninety`, scales up to `quintillion`) + Polish words (`jeden`..`dziewietnascie`, `dwadziescia`.., scales up to `trylion`); parsed to a number only if none of the words are names in scope and until an unknown word shows up (then the literal becomes the full input string). Digit tokens can also be names (fall back to literal if no such name exists). No fractions / `twenty-one` / Polish fractional / negatives yet.
 
 ---
@@ -133,16 +137,12 @@ Legend:
 
 
 ### Operators / expressions
-- ❌ Operator `=` as "super-loose equality" (README mentions "if you want to be much less precise").
 - ❌ `^` (exponentiation) and other extra operators from examples.
 
 ### Strings
-- ❌ Any number of quotes (e.g. `''''Lu''''`), including **0** (`name = Luke!`).
-- ❌ String interpolation with currencies: `${name}`, `£{name}`, `{name}€`, etc.
 - ❌ “Rich text” / links in strings.
 
 ### `previous` / `next` / `current` as "keywords"
-- ✅ Syntax like `previous score` (no parentheses).
 - ✅ `current`.
 - ❌ `await next score` and the whole async/await model from the README.
 

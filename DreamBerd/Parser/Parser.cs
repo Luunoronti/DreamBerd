@@ -1,4 +1,3 @@
-﻿
 namespace DreamberdInterpreter
 {
     public sealed partial class Parser
@@ -330,7 +329,7 @@ namespace DreamberdInterpreter
                 || lex == "f"))
                 return false;
 
-            // nazwa moze byc po keywordzie; zezwalamy na brak nawiasów
+            // nazwa moze byc po keywordzie; zezwalamy na brak nawias├│w
             return IsNameTokenType(PeekType(1));
         }
 
@@ -396,7 +395,7 @@ namespace DreamberdInterpreter
 
 
             // try again!
-            // Statement-only: dozwolone tylko wewnątrz if/else/idk.
+            // Statement-only: dozwolone tylko wewn─àtrz if/else/idk.
             // Implementujemy to jako dwa identyfikatory: 'try' 'again' + terminator (! lub ?).
             if (Check(TokenType.Identifier)
                 && string.Equals(Peek().Lexeme, "try", StringComparison.Ordinal)
@@ -476,7 +475,7 @@ namespace DreamberdInterpreter
             if (TryParseUpdateStatement(out var updateStmt))
                 return updateStmt;
 
-            // domyślnie: wyrażenie jako statement
+            // domy┼¢lnie: wyra┼╝enie jako statement
             Expression expr = ParseExpression();
             bool debug = ParseTerminatorIsDebug();
             return new ExpressionStatement(expr, debug, expr.Position);
@@ -505,9 +504,9 @@ namespace DreamberdInterpreter
 
         private TerminatorInfo ParseTerminator()
         {
-            // Gulf of Mexico / DreamBerd: można dać wiele '!' na końcu statementu.
-            // Dla większości statementów to jest tylko "extra"; dla deklaracji zmiennych
-            // ta liczba jest używana jako priorytet deklaracji (overloading).
+            // Gulf of Mexico / DreamBerd: mo┼╝na da─ç wiele '!' na ko┼äcu statementu.
+            // Dla wi─Ökszo┼¢ci statement├│w to jest tylko "extra"; dla deklaracji zmiennych
+            // ta liczba jest u┼╝ywana jako priorytet deklaracji (overloading).
             if (Match(TokenType.Bang))
             {
                 int count = 1;
@@ -669,7 +668,7 @@ namespace DreamberdInterpreter
                 expr = ParseExpression();
             }
 
-            bool isDebug = ParseTerminatorIsDebug(); // ignorujemy – return nie ma debug-print
+            bool isDebug = ParseTerminatorIsDebug(); // ignorujemy ΓÇô return nie ma debug-print
             _ = isDebug;
 
             return new ReturnStatement(expr, position);
@@ -772,8 +771,8 @@ namespace DreamberdInterpreter
             Consume(TokenType.Assign, "Expected '=' after variable name.");
             Expression initializer = ParseExpression();
 
-            // Liczba wykrzykników determinuje priorytet deklaracji (overloading).
-            // '?' (debug) traktujemy jak zwykły terminator z domyślnym priorytetem 1.
+            // Liczba wykrzyknik├│w determinuje priorytet deklaracji (overloading).
+            // '?' (debug) traktujemy jak zwyk┼éy terminator z domy┼¢lnym priorytetem 1.
             var term = ParseTerminator();
             int priority = term.IsDebug ? 1 : term.ExclamationCount;
 
@@ -1197,7 +1196,7 @@ namespace DreamberdInterpreter
             var condition = ParseExpression();
             _allowStatementKeywordsAsArgs = prevAllow;
 
-            // Dopuszczamy zarówno pojedynczy statement (np. expr!), jak i blok { ... }
+            // Dopuszczamy zar├│wno pojedynczy statement (np. expr!), jak i blok { ... }
             var thenStmt = ParseStatement();
 
             Statement? idkStmt = null;
@@ -1225,7 +1224,7 @@ namespace DreamberdInterpreter
             Expression condition = ParseExpression();
             _allowStatementKeywordsAsArgs = prevAllow;
 
-            // podobnie jak w if: body może być pojedynczym statementem albo blokiem
+            // podobnie jak w if: body mo┼╝e by─ç pojedynczym statementem albo blokiem
             Statement body = ParseStatement();
             return new WhileStatement(condition, body, position);
         }
@@ -1243,14 +1242,7 @@ namespace DreamberdInterpreter
                 if (expr is IdentifierExpression ident)
                 {
                     return new AssignmentExpression(ident.Name, value, ident.Position);
-                }
-
-                if (expr is NumberIdentifierExpression numIdent)
-                {
-                    return new AssignmentExpression(numIdent.Name, value, numIdent.Position);
-                }
-
-                if (expr is StringIdentifierExpression strIdent)
+                }if (expr is StringIdentifierExpression strIdent)
                 {
                     return new AssignmentExpression(strIdent.Name, value, strIdent.Position);
                 }
@@ -1260,11 +1252,11 @@ namespace DreamberdInterpreter
                     return new IndexAssignmentExpression(idx.Target, idx.Index, value, idx.Position);
                 }
 
-                // Błąd najlepiej przypiąć do tokenu '=' (Previous()), bo to on zaczyna assignment.
-                throw new InterpreterException("Invalid assignment target.", Previous().Position);
+                // Non-assignable: treat '=' as super-loose equality.
+                return new BinaryExpression(expr, BinaryOperator.Equal, value, Previous().Position);
             }
 
-            // cztero-gałęziowy operator warunkowy:
+            // cztero-ga┼é─Öziowy operator warunkowy:
             // cond ? t : f :: m ::: u
             if (Match(TokenType.QuestionOp))
             {
@@ -1816,7 +1808,7 @@ Expression ParsePower()
                     continue;
                 }
 
-                // Call bez nawiasów: foo 1, 2, albo foo(1,2) (nawiasy to whitespace)
+                // Call bez nawias├│w: foo 1, 2, albo foo(1,2) (nawiasy to whitespace)
                 if (TryParseCallArguments(ref expr))
                     continue;
 
@@ -1849,7 +1841,7 @@ Expression ParsePower()
                     string.Equals(Peek().Lexeme, "matches", StringComparison.Ordinal))
                     return false;
 
-                // '[' bez odstępu po callee to index, nie argument
+                // '[' bez odst─Öpu po callee to index, nie argument
                 if (Peek().Type == TokenType.LeftBracket &&
                     HasNoRealSpacesBetweenTokens(_current - 1, _current))
                     return false;
@@ -1882,11 +1874,10 @@ Expression ParsePower()
             bool IsAssignable(Expression e)
             {
                 return e is IdentifierExpression
-                    || e is NumberIdentifierExpression
                     || e is StringIdentifierExpression
                     || e is IndexExpression
                     || (e is PostfixUpdateExpression p &&
-                        (p.Target is IdentifierExpression || p.Target is NumberIdentifierExpression || p.Target is StringIdentifierExpression || p.Target is IndexExpression));
+                        (p.Target is IdentifierExpression || p.Target is StringIdentifierExpression || p.Target is IndexExpression));
             }
 
             while (Match(TokenType.StarRun))
@@ -1908,7 +1899,7 @@ Expression ParsePower()
                 expr = new PowerStarsExpression(expr, exponent, tok.Position);
             }
 
-            // 2) Potem postfix update chain: pozwalamy mieszać ++ i --
+            // 2) Potem postfix update chain: pozwalamy miesza─ç ++ i --
             int delta = 0;
             bool sawAny = false;
             int opPos = -1;
@@ -1936,7 +1927,7 @@ Expression ParsePower()
 
             if (sawAny)
             {
-                // Target musi być assignable: ident albo arr[index]
+                // Target musi by─ç assignable: ident albo arr[index]
                 if (!IsAssignable(expr))
                     throw new InterpreterException("Postfix ++/-- requires an assignable target (variable or arr[index]).", opPos);
 
@@ -2222,3 +2213,6 @@ Expression ParsePower()
         }
     }
 }
+
+
+

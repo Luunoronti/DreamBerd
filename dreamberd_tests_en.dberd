@@ -65,6 +65,8 @@ b"!
 assertEq("escape newline", literalNewline, escapedNewline)!
 const const interpName = "world"!
 assertEq("string interpolation", "Hello world", "Hello ${interpName}")!
+assertEq("super-loose '=' equality", true, 1 = "1")!
+assertEq("super-loose '=' inequality", false, 1 = "2")!
 printsl("printsl ok")!
 print("")!
 

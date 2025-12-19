@@ -9,7 +9,7 @@ Legenda:
 - ✅ = zaimplementowane
 - 🟡 = częściowo / inaczej niż w specyfikacji
 - ❌ = brak
-- Migawka progresu (ważenie: partial = 0.5): 62 ✅, 5 🟡, 20 ❌ → ok. 74% pokrycia.
+- Migawka progresu (wazenie: partial = 0.5): 65 ✅, 7 �, 15 ❌ -> ok. 79% pokrycia.
 
 ---
 
@@ -46,6 +46,7 @@ Legenda:
 - ✅ Arytmetyka: `+ - * /` (dzielenie przez 0 → `undefined`).
 - ✅ Porównania: `< > <= >=`.
 - ✅ Równość: `==` (very loose / stringowo), `===` (loose / numerycznie), `====` (strict).
+- ✅ Operator `=` jako "super-luzna rownosc" (README wspomina "jesli chcesz byc duzo mniej precyzyjny").
 - ✅ Unarny minus: `-x`.
 - ✅ Unarny not: `;expr` (true↔false, maybe/undefined przechodzi).
 - ✅ Postfixowe łańcuchy `x++++--!` i potęgowanie `x****!` (styl DreamBerd).
@@ -88,6 +89,7 @@ Legenda:
   - wybór aktywnej: najwyższy priorytet (liczba `!`), potem „najświeższa”
   - wygasanie lifetimes może powodować fallback do starszej deklaracji
 - ✅ Historia zmiennych: `previous(x)`, `next(x)`, `history(x)`.
+- ✅ Formy bez nawiasow: `previous x`, `next x`, `current x`.
 
 ### when(...)
 - ✅ `when condition { ... }` subskrybuje mutacje zmiennych użytych w condition (nawiasy opcjonalne/ignorowane).
@@ -117,6 +119,8 @@ Legenda:
 
 - 🟡 Mutability `const var` / `var var` nie wspiera „mutacji obiektów” (brak metod jak `push/pop`, brak obiektów).
 - ✅ Naming: Unicode/emoji identyfikatory, keywordy jako nazwy, cyfry jako nazwy; puste nazwy przez `""` też działają. Token liczbowy w wyrażeniu najpierw próbuje znaleźć zmienną/funkcję o takiej nazwie, dopiero potem jest literalem.
+- � Stringi bez cudzyslowow: 0-quote fallback do identyfikatora, jesli istnieje.
+- � Interpolacja stringow jest minimalna (podstawowe `{name}` / `$name`, bez wariantow walut).
 - 🟡 "Number names": slowa liczb po angielsku (`zero`..`nineteen`, `twenty`..`ninety`, skale do `quintillion`) i po polsku (`jeden`..`dziewietnascie`, `dwadziescia`.., skale do `trylionu`); parsujemy na literal tylko gdy slowa nie sa nazwami w scope i dopoki nie trafimy na nieznane slowo (wtedy literal zmienia sie w string calkowitego wejscia). Tokeny cyfr też mogą być nazwami (fallback do literalu przy braku nazwy). Brak ulamkow / `twenty-one` / polskich ulamkow / znaku minus.
 
 ---
@@ -138,11 +142,9 @@ Legenda:
 
 ### Stringi
 - ❌ Dowolna liczba cudzysłowów (np. `''''Lu''''`), włącznie z **0** (`name = Luke!`).
-- ❌ String interpolation z walutami: `${name}`, `£{name}`, `{name}€` itd.
 - ❌ „Rich text” / linki w stringach.
 
 ### `previous` / `next` / `current` jako „keywordy”
-- ✅ Składnia typu `previous score` (bez nawiasów).
 - ✅ `current`.
 - ❌ `await next score` i w ogóle async/await model z README.
 
