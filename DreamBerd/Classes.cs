@@ -6,12 +6,30 @@ namespace DreamberdInterpreter
     internal sealed class ClassDefinition
     {
         public string Name { get; }
-        public Dictionary<string, Evaluator.FunctionDefinition> Methods { get; }
+        public Dictionary<string, Evaluator.FunctionDefinition> InstanceMethods { get; }
+        public Dictionary<string, Evaluator.FunctionDefinition> StaticMethods { get; }
+        public List<ClassPropertyDeclaration> Properties { get; }
+        public Dictionary<string, Value> StaticFields { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> StaticPropertyNames { get; } = new(StringComparer.Ordinal);
+        public string? InstanceFallback { get; set; }
+        public string? StaticFallback { get; set; }
 
-        public ClassDefinition(string name, Dictionary<string, Evaluator.FunctionDefinition> methods)
+        public ClassDefinition(
+            string name,
+            Dictionary<string, Evaluator.FunctionDefinition> instanceMethods,
+            Dictionary<string, Evaluator.FunctionDefinition> staticMethods,
+            List<ClassPropertyDeclaration> properties)
         {
             Name = name ?? throw new ArgumentNullException(nameof(name));
-            Methods = methods ?? throw new ArgumentNullException(nameof(methods));
+            InstanceMethods = instanceMethods ?? throw new ArgumentNullException(nameof(instanceMethods));
+            StaticMethods = staticMethods ?? throw new ArgumentNullException(nameof(staticMethods));
+            Properties = properties ?? new List<ClassPropertyDeclaration>();
+
+            foreach (var prop in Properties)
+            {
+                if (prop.IsStatic)
+                    StaticPropertyNames.Add(prop.Name);
+            }
         }
     }
 

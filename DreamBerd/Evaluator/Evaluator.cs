@@ -37,6 +37,7 @@ namespace DreamberdInterpreter
         private readonly Dictionary<string, ClassDefinition> _classes = new Dictionary<string, ClassDefinition>(StringComparer.Ordinal);
         private readonly Dictionary<string, ClassInstance> _classInstances = new Dictionary<string, ClassInstance>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldHistory> _fieldHistory = new Dictionary<string, FieldHistory>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldHistory> _staticFieldHistory = new Dictionary<string, FieldHistory>(StringComparer.Ordinal);
 
         private readonly Stack<CallFrame> _callStack = new Stack<CallFrame>();
 
@@ -254,6 +255,16 @@ namespace DreamberdInterpreter
 
             foreach (var k in toRemove)
                 _fieldHistory.Remove(k);
+
+            toRemove.Clear();
+            foreach (var key in _staticFieldHistory.Keys)
+            {
+                if (key.StartsWith(className + "::", StringComparison.Ordinal))
+                    toRemove.Add(key);
+            }
+
+            foreach (var k in toRemove)
+                _staticFieldHistory.Remove(k);
         }
 
         private static bool TryToInt(Value v, out int i)
@@ -342,9 +353,38 @@ namespace DreamberdInterpreter
                 return existing;
 
             var instance = new ClassInstance(def);
+            InitializeInstanceProperties(instance);
             _classInstances[def.Name] = instance;
             InvokeConstructorIfNeeded(instance);
             return instance;
+        }
+
+        private void InitializeInstanceProperties(ClassInstance instance)
+        {
+            foreach (var prop in instance.Definition.Properties)
+            {
+                if (prop.IsStatic)
+                    continue;
+
+                Value init = prop.Initializer != null ? EvaluateExpression(prop.Initializer) : Value.Undefined;
+
+                if (!instance.Fields.ContainsKey(prop.Name))
+                {
+                    var hist = GetOrCreateFieldHistory(instance, prop.Name);
+                    if (hist.Values.Count == 0)
+                    {
+                        hist.Values.Add(Value.Undefined);
+                        hist.Index = 0;
+                    }
+                    if (!hist.Values[^1].StrictEquals(init))
+                    {
+                        hist.Values.Add(init);
+                        hist.Index = hist.Values.Count - 1;
+                    }
+
+                    instance.Fields[prop.Name] = init;
+                }
+            }
         }
 
         private void InvokeConstructorIfNeeded(ClassInstance instance)
@@ -354,7 +394,7 @@ namespace DreamberdInterpreter
 
             instance.Initialized = true;
 
-            if (instance.Definition.Methods.TryGetValue("constructor", out var ctor))
+            if (instance.Definition.InstanceMethods.TryGetValue("constructor", out var ctor))
             {
                 InvokeBoundMethod(new BoundMethod(instance, "constructor", ctor), Array.Empty<Expression>());
             }
@@ -402,7 +442,17 @@ namespace DreamberdInterpreter
 
         private Value GetObjectMember(ClassInstance instance, string fieldKey)
         {
-            if (instance.Definition.Methods.TryGetValue(fieldKey, out var methodDef))
+            if (instance.Definition.StaticMethods.TryGetValue(fieldKey, out var staticMethod))
+            {
+                return Value.FromMethod(new BoundMethod(instance, fieldKey, staticMethod));
+            }
+
+            if (instance.Definition.StaticFields.TryGetValue(fieldKey, out var staticField))
+            {
+                return staticField;
+            }
+
+            if (instance.Definition.InstanceMethods.TryGetValue(fieldKey, out var methodDef))
             {
                 return Value.FromMethod(new BoundMethod(instance, fieldKey, methodDef));
             }
@@ -410,24 +460,50 @@ namespace DreamberdInterpreter
             if (instance.Fields.TryGetValue(fieldKey, out var value))
                 return value;
 
+            if (instance.Definition.InstanceFallback != null &&
+                instance.Fields.TryGetValue(instance.Definition.InstanceFallback, out var fallbackVal))
+            {
+                return fallbackVal;
+            }
+
+            if (instance.Definition.StaticFallback != null &&
+                instance.Definition.StaticFields.TryGetValue(instance.Definition.StaticFallback, out var staticFallback))
+            {
+                return staticFallback;
+            }
+
             return Value.Undefined;
         }
 
-        private FieldHistory GetOrCreateFieldHistory(ClassInstance instance, string fieldKey)
+        private static bool IsStaticField(ClassInstance instance, string fieldKey) =>
+            instance.Definition.StaticPropertyNames.Contains(fieldKey);
+
+        private FieldHistory GetOrCreateFieldHistory(ClassInstance instance, string fieldKey, bool isStatic = false)
         {
-            string key = $"{instance.Name}::{fieldKey}";
-            if (!_fieldHistory.TryGetValue(key, out var hist))
+            return GetOrCreateFieldHistory(instance.Name, fieldKey, isStatic);
+        }
+
+        private FieldHistory GetOrCreateFieldHistory(string className, string fieldKey, bool isStatic)
+        {
+            string prefix = isStatic ? "static::" : string.Empty;
+            string key = $"{prefix}{className}::{fieldKey}";
+            var dict = isStatic ? _staticFieldHistory : _fieldHistory;
+            if (!dict.TryGetValue(key, out var hist))
             {
                 hist = new FieldHistory();
-                _fieldHistory[key] = hist;
+                dict[key] = hist;
             }
             return hist;
         }
 
         private void AssignObjectField(ClassInstance instance, string fieldKey, Value newValue, string? aliasName, bool notifyAlias)
         {
-            Value current = instance.Fields.TryGetValue(fieldKey, out var existing) ? existing : Value.Undefined;
-            var history = GetOrCreateFieldHistory(instance, fieldKey);
+            bool isStatic = IsStaticField(instance, fieldKey);
+            Value current = isStatic
+                ? (instance.Definition.StaticFields.TryGetValue(fieldKey, out var existingStatic) ? existingStatic : Value.Undefined)
+                : (instance.Fields.TryGetValue(fieldKey, out var existing) ? existing : Value.Undefined);
+
+            var history = GetOrCreateFieldHistory(instance, fieldKey, isStatic);
 
             if (history.Values.Count == 0)
             {
@@ -448,7 +524,10 @@ namespace DreamberdInterpreter
                 }
             }
 
-            instance.Fields[fieldKey] = newValue;
+            if (isStatic)
+                instance.Definition.StaticFields[fieldKey] = newValue;
+            else
+                instance.Fields[fieldKey] = newValue;
 
             OnVariableMutated(instance.Name);
 
@@ -463,8 +542,11 @@ namespace DreamberdInterpreter
             {
                 string key = ToFieldKey(EvaluateExpression(idx.Index));
                 var instance = container.Object;
-                bool removed = instance.Fields.Remove(key);
-                bool removedHistory = _fieldHistory.Remove($"{instance.Name}::{key}");
+                bool isStatic = IsStaticField(instance, key);
+                bool removed = isStatic ? instance.Definition.StaticFields.Remove(key) : instance.Fields.Remove(key);
+                bool removedHistory = isStatic
+                    ? _staticFieldHistory.Remove($"static::{instance.Name}::{key}")
+                    : _fieldHistory.Remove($"{instance.Name}::{key}");
 
                 if (removed || removedHistory)
                 {

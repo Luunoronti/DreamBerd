@@ -455,6 +455,29 @@ assertEq("Ctor singleton przez alias: Ctor['init'] == 5", 5.0, Ctor["init"])!
 print("")!
 
 // --------------------------------------------
+print("== 19) Klasy 2.0: statyczne / auto-props / fallback ==")!
+// --------------------------------------------
+Static is a class {
+    value : default 1!
+    static staticVal : default 99!
+    fallback : default 404!
+    function inc x => { source["value"] :+ 1! }
+    static function bump x => { source["staticVal"] :+ x! }
+}
+
+assertEq("auto-prop default value == 1", 1, Static["value"])!
+Static["inc"] 0!
+assertEq("auto-prop po inc() == 2", 2, Static["value"])!
+assertEq("static auto-prop default == 99", 99, Static["staticVal"])!
+Static["bump"] 1!
+assertEq("static auto-prop po bump(1) == 100", 100, Static["staticVal"])!
+Static["staticVal"] :+ 1!
+assertEq("static auto-prop po :+ 1! == 101", 101, Static["staticVal"])!
+assertEq("fallback przy brakujacym fieldzie => 404", 404, Static["missing"])!
+
+print("")!
+
+// --------------------------------------------
 print("== Summary ==")!
 print("passed: " + passed)!
 print("failed: " + failed)!

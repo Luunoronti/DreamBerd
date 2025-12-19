@@ -1,6 +1,7 @@
 ﻿// Evaluator.Evaluation.cs
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 namespace DreamberdInterpreter
 {
@@ -244,13 +245,47 @@ namespace DreamberdInterpreter
 
                 case ClassDeclarationStatement cds:
                     {
-                        var methods = new Dictionary<string, FunctionDefinition>(StringComparer.Ordinal);
+                        var instanceMethods = new Dictionary<string, FunctionDefinition>(StringComparer.Ordinal);
+                        var staticMethods = new Dictionary<string, FunctionDefinition>(StringComparer.Ordinal);
                         foreach (var m in cds.Methods)
                         {
-                            methods[m.Name] = new FunctionDefinition(m.Parameters, m.Body);
+                            var fn = new FunctionDefinition(m.Parameters, m.Body);
+                            if (m.IsStatic)
+                                staticMethods[m.Name] = fn;
+                            else
+                                instanceMethods[m.Name] = fn;
                         }
 
-                        var def = new ClassDefinition(cds.Name, methods);
+                        var def = new ClassDefinition(cds.Name, instanceMethods, staticMethods, cds.Properties.ToList());
+
+                        foreach (var prop in cds.Properties)
+                        {
+                            if (prop.IsStatic)
+                            {
+                                Value init = prop.Initializer != null ? EvaluateExpression(prop.Initializer) : Value.Undefined;
+                                def.StaticFields[prop.Name] = init;
+                                if (prop.IsFallback)
+                                    def.StaticFallback = prop.Name;
+
+                                var hist = GetOrCreateFieldHistory(def.Name, prop.Name, isStatic: true);
+                                if (hist.Values.Count == 0)
+                                {
+                                    hist.Values.Add(Value.Undefined);
+                                    hist.Index = 0;
+                                }
+                                if (!hist.Values[^1].StrictEquals(init))
+                                {
+                                    hist.Values.Add(init);
+                                    hist.Index = hist.Values.Count - 1;
+                                }
+                            }
+                            else
+                            {
+                                if (prop.IsFallback)
+                                    def.InstanceFallback = prop.Name;
+                            }
+                        }
+
                         _classes[cds.Name] = def;
                         _classInstances.Remove(cds.Name);
                         ClearFieldHistoryForClass(cds.Name);
@@ -1032,6 +1067,9 @@ case TryAgainStatement tas:
                         AssignObjectField(instance, fieldKey, v, aliasForAssign, notifyAlias: false);
                     };
 
+                    if (IsStaticField(instance, fieldKey))
+                        return instance.Definition.StaticFields.TryGetValue(fieldKey, out var staticField) ? staticField : Value.Undefined;
+
                     return instance.Fields.TryGetValue(fieldKey, out var currentField) ? currentField : Value.Undefined;
                 }
 
@@ -1303,8 +1341,11 @@ case TryAgainStatement tas:
 
         private bool TryGetFieldHistory(ClassInstance instance, string fieldKey, out FieldHistory history)
         {
-            string key = $"{instance.Name}::{fieldKey}";
-            return _fieldHistory.TryGetValue(key, out history);
+            bool isStatic = IsStaticField(instance, fieldKey);
+            string prefix = isStatic ? "static::" : string.Empty;
+            string key = $"{prefix}{instance.Name}::{fieldKey}";
+            var dict = isStatic ? _staticFieldHistory : _fieldHistory;
+            return dict.TryGetValue(key, out history);
         }
 
         private bool TryPreviousField(ClassInstance instance, string fieldKey, out Value newValue, out bool changed)
@@ -1325,9 +1366,17 @@ case TryAgainStatement tas:
                 newValue = history.Values[history.Index];
             }
 
-            changed = !instance.Fields.TryGetValue(fieldKey, out var currentVal) || !currentVal.StrictEquals(newValue);
+            Value currentVal = IsStaticField(instance, fieldKey)
+                ? (instance.Definition.StaticFields.TryGetValue(fieldKey, out var stat) ? stat : Value.Undefined)
+                : (instance.Fields.TryGetValue(fieldKey, out var inst) ? inst : Value.Undefined);
+            changed = !currentVal.StrictEquals(newValue);
             if (changed)
-                instance.Fields[fieldKey] = newValue;
+            {
+                if (IsStaticField(instance, fieldKey))
+                    instance.Definition.StaticFields[fieldKey] = newValue;
+                else
+                    instance.Fields[fieldKey] = newValue;
+            }
 
             return true;
         }
@@ -1350,9 +1399,17 @@ case TryAgainStatement tas:
                 newValue = history.Values[history.Index];
             }
 
-            changed = !instance.Fields.TryGetValue(fieldKey, out var currentVal) || !currentVal.StrictEquals(newValue);
+            Value currentVal = IsStaticField(instance, fieldKey)
+                ? (instance.Definition.StaticFields.TryGetValue(fieldKey, out var stat) ? stat : Value.Undefined)
+                : (instance.Fields.TryGetValue(fieldKey, out var inst) ? inst : Value.Undefined);
+            changed = !currentVal.StrictEquals(newValue);
             if (changed)
-                instance.Fields[fieldKey] = newValue;
+            {
+                if (IsStaticField(instance, fieldKey))
+                    instance.Definition.StaticFields[fieldKey] = newValue;
+                else
+                    instance.Fields[fieldKey] = newValue;
+            }
 
             return true;
         }

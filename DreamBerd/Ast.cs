@@ -213,13 +213,51 @@ namespace DreamberdInterpreter
     public sealed class ClassDeclarationStatement : Statement
     {
         public string Name { get; }
-        public IReadOnlyList<FunctionDeclarationStatement> Methods { get; }
+        public IReadOnlyList<ClassMethodDeclaration> Methods { get; }
+        public IReadOnlyList<ClassPropertyDeclaration> Properties { get; }
 
-        public ClassDeclarationStatement(string name, IReadOnlyList<FunctionDeclarationStatement> methods, int position)
+        public ClassDeclarationStatement(string name, IReadOnlyList<ClassMethodDeclaration> methods, IReadOnlyList<ClassPropertyDeclaration> properties, int position)
             : base(position)
         {
             Name = name ?? throw new ArgumentNullException(nameof(name));
             Methods = methods ?? throw new ArgumentNullException(nameof(methods));
+            Properties = properties ?? Array.Empty<ClassPropertyDeclaration>();
+        }
+    }
+
+    public sealed class ClassMethodDeclaration
+    {
+        public string Name { get; }
+        public IReadOnlyList<string> Parameters { get; }
+        public Statement Body { get; }
+        public bool IsStatic { get; }
+        public int Position { get; }
+
+        public ClassMethodDeclaration(string name, IReadOnlyList<string> parameters, Statement body, bool isStatic, int position)
+        {
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+            Parameters = parameters ?? throw new ArgumentNullException(nameof(parameters));
+            Body = body ?? throw new ArgumentNullException(nameof(body));
+            IsStatic = isStatic;
+            Position = position;
+        }
+    }
+
+    public sealed class ClassPropertyDeclaration
+    {
+        public string Name { get; }
+        public Expression? Initializer { get; }
+        public bool IsStatic { get; }
+        public bool IsFallback { get; }
+        public int Position { get; }
+
+        public ClassPropertyDeclaration(string name, Expression? initializer, bool isStatic, bool isFallback, int position)
+        {
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+            Initializer = initializer;
+            IsStatic = isStatic;
+            IsFallback = isFallback;
+            Position = position;
         }
     }
 

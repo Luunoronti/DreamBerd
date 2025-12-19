@@ -572,23 +572,50 @@ namespace DreamberdInterpreter
 
             // Klasa ma wlasny scope nazw podczas parsowania metod.
             PushScope();
-            var methods = new List<FunctionDeclarationStatement>();
+            var methods = new List<ClassMethodDeclaration>();
+            var properties = new List<ClassPropertyDeclaration>();
             try
             {
                 while (!Check(TokenType.RightBrace) && !IsAtEnd())
                 {
-                    if (!IsFunctionKeyword())
-                        Fatal(Peek(), "Only function declarations are allowed inside a class.");
-
-                    var methodStmt = ParseFunctionDeclaration(declareInEnclosingScope: false);
-                    if (methodStmt is FunctionDeclarationStatement funcDecl)
+                    bool isStatic = false;
+                    if (Check(TokenType.Identifier) && string.Equals(Peek().Lexeme, "static", StringComparison.Ordinal))
                     {
-                        methods.Add(funcDecl);
+                        Advance();
+                        isStatic = true;
                     }
-                    else
+
+                    if (IsFunctionKeyword())
                     {
+                        var methodStmt = ParseFunctionDeclaration(declareInEnclosingScope: false);
+                        if (methodStmt is FunctionDeclarationStatement funcDecl)
+                        {
+                            methods.Add(new ClassMethodDeclaration(funcDecl.Name, funcDecl.Parameters, funcDecl.Body, isStatic, funcDecl.Position));
+                            continue;
+                        }
+
                         Fatal(Peek(), "Expected function declaration inside class.");
                     }
+
+                    // Auto-property: <name> : default <expr>!
+                    Token propNameTok = ConsumeNameToken("Expected property name inside class.");
+                    string propName = TokenToName(propNameTok);
+                    bool isFallback = string.Equals(propName, "fallback", StringComparison.Ordinal);
+
+                    Consume(TokenType.Colon, "Expected ':' after property name.");
+                    if (!(Check(TokenType.Identifier) && string.Equals(Peek().Lexeme, "default", StringComparison.OrdinalIgnoreCase)))
+                        Fatal(Peek(), "Expected 'default' after ':' in property declaration.");
+
+                    Advance(); // consume 'default'
+
+                    Expression? init = null;
+                    if (!Check(TokenType.Bang) && !Check(TokenType.Question))
+                        init = ParseExpression();
+
+                    bool isDebug = ParseTerminatorIsDebug();
+                    _ = isDebug;
+
+                    properties.Add(new ClassPropertyDeclaration(propName, init, isStatic, isFallback, propNameTok.Position));
                 }
 
                 Consume(TokenType.RightBrace, "Expected '}' after class body.");
@@ -598,7 +625,7 @@ namespace DreamberdInterpreter
                 PopScope();
             }
 
-            return new ClassDeclarationStatement(name, methods, pos);
+            return new ClassDeclarationStatement(name, methods, properties, pos);
         }
 
         private Statement ParseReturnStatementAfterKeyword(int position)
