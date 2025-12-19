@@ -1163,6 +1163,11 @@ case TryAgainStatement tas:
                     return EvaluateNextCall(call);
                 }
 
+                if (string.Equals(name, "current", StringComparison.Ordinal))
+                {
+                    return EvaluateCurrentCall(call);
+                }
+
                 if (string.Equals(name, "history", StringComparison.Ordinal))
                 {
                     return EvaluateHistoryCall(call);
@@ -1280,6 +1285,15 @@ case TryAgainStatement tas:
             }
 
             throw new InterpreterException("next(x) expects a single identifier or field argument.", call.Position);
+        }
+
+        private Value EvaluateCurrentCall(CallExpression call)
+        {
+            if (call.Arguments.Count != 1)
+                throw new InterpreterException("current(x) expects a single identifier or field argument.", call.Position);
+
+            var arg = call.Arguments[0];
+            return EvaluateExpression(arg);
         }
 
         private Value EvaluateHistoryCall(CallExpression call)

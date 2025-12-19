@@ -334,6 +334,17 @@ namespace DreamberdInterpreter
             return IsNameTokenType(PeekType(1));
         }
 
+        private static bool IsKeywordCallName(string name) =>
+            string.Equals(name, "previous", StringComparison.Ordinal)
+            || string.Equals(name, "next", StringComparison.Ordinal)
+            || string.Equals(name, "current", StringComparison.Ordinal);
+
+        private bool IsKeywordCallTargetStart(TokenType type) =>
+            IsNameTokenType(type)
+            || type == TokenType.LeftParen
+            || type == TokenType.LeftBracket
+            || type == TokenType.RightBracket;
+
         private Statement ParseStatement()
         {
             // Blok { ... }
@@ -1712,6 +1723,16 @@ Expression ParsePower()
 
         Expression ParseUnary()
         {
+            if (Check(TokenType.Identifier)
+                && IsKeywordCallName(Peek().Lexeme)
+                && IsKeywordCallTargetStart(PeekType(1)))
+            {
+                var kw = Advance();
+                var callee = new IdentifierExpression(kw.Lexeme, kw.Position);
+                var arg = ParsePostfix();
+                return new CallExpression(callee, new List<Expression> { arg }, kw.Position);
+            }
+
             // Root prefix: \x, \\x, \\\x, ...
             int rootCount = 0;
             int rootPos = -1;

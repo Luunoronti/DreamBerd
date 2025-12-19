@@ -9,7 +9,7 @@ Legend:
 - ✅ = implemented
 - 🟡 = partial / different from the spec
 - ❌ = missing
-- Progress snapshot (weighted: partial = 0.5): 60 ✅, 5 🟡, 22 ❌ → ~72% coverage.
+- Progress snapshot (weighted: partial = 0.5): 62 ✅, 5 🟡, 20 ❌ → ~74% coverage.
 
 ---
 
@@ -141,9 +141,9 @@ Legend:
 - ❌ String interpolation with currencies: `${name}`, `£{name}`, `{name}€`, etc.
 - ❌ “Rich text” / links in strings.
 
-### `previous` / `next` / `current` as “keywords”
-- ❌ Syntax like `previous score` (no parentheses).
-- ❌ `current`.
+### `previous` / `next` / `current` as "keywords"
+- ✅ Syntax like `previous score` (no parentheses).
+- ✅ `current`.
 - ❌ `await next score` and the whole async/await model from the README.
 
 ### File structure / import/export

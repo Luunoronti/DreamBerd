@@ -9,7 +9,7 @@ Legenda:
 - ✅ = zaimplementowane
 - 🟡 = częściowo / inaczej niż w specyfikacji
 - ❌ = brak
-- Migawka progresu (ważenie: partial = 0.5): 60 ✅, 5 🟡, 22 ❌ → ok. 72% pokrycia.
+- Migawka progresu (ważenie: partial = 0.5): 62 ✅, 5 🟡, 20 ❌ → ok. 74% pokrycia.
 
 ---
 
@@ -142,8 +142,8 @@ Legenda:
 - ❌ „Rich text” / linki w stringach.
 
 ### `previous` / `next` / `current` jako „keywordy”
-- ❌ Składnia typu `previous score` (bez nawiasów).
-- ❌ `current`.
+- ✅ Składnia typu `previous score` (bez nawiasów).
+- ✅ `current`.
 - ❌ `await next score` i w ogóle async/await model z README.
 
 ### Struktura plików / import/export
