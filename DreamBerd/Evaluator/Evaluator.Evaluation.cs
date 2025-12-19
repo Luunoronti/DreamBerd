@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 
 namespace DreamberdInterpreter
 {
@@ -70,7 +71,15 @@ namespace DreamberdInterpreter
             switch (expression)
             {
                 case LiteralExpression lit:
-                    result = lit.Value;
+                    if (lit.Value.Kind == ValueKind.String)
+                    {
+                        string raw = lit.Value.String ?? string.Empty;
+                        result = Value.FromString(InterpolateString(raw));
+                    }
+                    else
+                    {
+                        result = lit.Value;
+                    }
                     break;
 
                 case IdentifierExpression ident:
@@ -516,6 +525,74 @@ case TryAgainStatement tas:
                 return value;
 
             return Value.FromString(ident.Name);
+        }
+
+        private string InterpolateString(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return text;
+
+            int firstMarker = text.IndexOf('{');
+            int firstDollar = text.IndexOf('$');
+            if (firstMarker < 0 && firstDollar < 0)
+                return text;
+
+            var sb = new StringBuilder(text.Length);
+            int i = 0;
+            while (i < text.Length)
+            {
+                char c = text[i];
+
+                if (c == '\\' && i + 1 < text.Length && (text[i + 1] == '{' || text[i + 1] == '$'))
+                {
+                    sb.Append(text[i + 1]);
+                    i += 2;
+                    continue;
+                }
+
+                if (c == '$' && i + 1 < text.Length && text[i + 1] == '{')
+                {
+                    int end = text.IndexOf('}', i + 2);
+                    if (end > i + 2)
+                    {
+                        string name = text.Substring(i + 2, end - (i + 2));
+                        sb.Append(ResolveInterpolationName(name));
+                        i = end + 1;
+                        continue;
+                    }
+                }
+
+                if (c == '{')
+                {
+                    int end = text.IndexOf('}', i + 1);
+                    if (end > i + 1)
+                    {
+                        string name = text.Substring(i + 1, end - (i + 1));
+                        sb.Append(ResolveInterpolationName(name));
+                        i = end + 1;
+                        continue;
+                    }
+                }
+
+                sb.Append(c);
+                i++;
+            }
+
+            return sb.ToString();
+        }
+
+        private string ResolveInterpolationName(string name)
+        {
+            if (TryResolveName(name, out var value))
+                return value.ToString();
+
+            if (_classes.TryGetValue(name, out var classDef))
+            {
+                var instance = GetOrCreateInstance(classDef);
+                return Value.FromObject(instance).ToString();
+            }
+
+            return name;
         }
         private Value EvaluateUnary(UnaryExpression unary)
         {
@@ -1149,6 +1226,16 @@ case TryAgainStatement tas:
                     {
                         Value v = EvaluateExpression(argExpr);
                         Console.WriteLine(v.ToString());
+                    }
+                    return Value.Null;
+                }
+
+                if (string.Equals(name, "printsl", StringComparison.Ordinal))
+                {
+                    foreach (var argExpr in call.Arguments)
+                    {
+                        Value v = EvaluateExpression(argExpr);
+                        Console.Write(v.ToString());
                     }
                     return Value.Null;
                 }

@@ -276,7 +276,10 @@ namespace DreamberdInterpreter
                     break;
                 case '"':
                 case '\'':
-                    ScanString(c);
+                    int quoteCount = DetermineOpeningQuoteCount(c);
+                    for (int i = 1; i < quoteCount; i++)
+                        Advance();
+                    ScanString(c, quoteCount);
                     break;
                 case '▷':
                     AddToken(TokenType.ClampSymbol);
@@ -313,20 +316,108 @@ namespace DreamberdInterpreter
             }
         }
 
-        private void ScanString(char quote)
+        private void ScanString(char quote, int quoteCount)
         {
             var sb = new StringBuilder();
-            while (!IsAtEnd() && Peek() != quote)
+            while (!IsAtEnd())
             {
+                if (Peek() == quote)
+                {
+                    int run = 0;
+                    while (!IsAtEnd() && Peek() == quote)
+                    {
+                        Advance();
+                        run++;
+                    }
+
+                    if (run >= quoteCount)
+                    {
+                        AddToken(TokenType.String, sb.ToString());
+                        return;
+                    }
+
+                    sb.Append(new string(quote, run));
+                    continue;
+                }
+
                 char c = Advance();
+                if (c == '\r')
+                {
+                    if (Peek() == '\n')
+                        Advance();
+                    sb.Append('\n');
+                    continue;
+                }
+
+                if (c == '\\')
+                {
+                    if (IsAtEnd())
+                        break;
+
+                    char escaped = Advance();
+                    switch (escaped)
+                    {
+                        case 'n':
+                            sb.Append('\n');
+                            break;
+                        case 'r':
+                            sb.Append('\r');
+                            break;
+                        case 't':
+                            sb.Append('\t');
+                            break;
+                        case '0':
+                            sb.Append('\0');
+                            break;
+                        case '\\':
+                            sb.Append('\\');
+                            break;
+                        case '"':
+                            sb.Append('"');
+                            break;
+                        case '\'':
+                            sb.Append('\'');
+                            break;
+                        default:
+                            sb.Append('\\');
+                            sb.Append(escaped);
+                            break;
+                    }
+                    continue;
+                }
+
                 sb.Append(c);
             }
 
-            if (IsAtEnd())
-                throw new InterpreterException("Unterminated string literal.", _start);
+            throw new InterpreterException("Unterminated string literal.", _start);
+        }
 
-            Advance(); // closing quote
-            AddToken(TokenType.String, sb.ToString());
+        private int DetermineOpeningQuoteCount(char quote)
+        {
+            int run = 1;
+            int i = _current;
+            while (i < _source.Length && _source[i] == quote)
+            {
+                run++;
+                i++;
+            }
+
+            if (run >= 3)
+                return run;
+
+            if (run == 2)
+            {
+                if (i >= _source.Length)
+                    return 1;
+
+                char next = _source[i];
+                if (char.IsWhiteSpace(next) || IsOperatorChar(next) || next == '!' || next == '?' || next == '(' || next == ')')
+                    return 1;
+
+                return 2;
+            }
+
+            return 1;
         }
 
         private void ScanNumber()

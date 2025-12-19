@@ -53,6 +53,20 @@ assertEq("2 * 3 = 6", 6, 2 * 3)!
 assertEq("9 / 3 = 3", 3, 9 / 3)!
 assertEq("division by zero => undefined", undefined, 1 / 0)!
 assertEq("concat number->string", "a1", "a" + 1)!
+const const zeroQuote = Luke!
+assertEq("zero-quote string fallback", "Luke", zeroQuote)!
+const const multiQuote = '''Lu'''!
+assertEq("multi-quote string", "Lu", multiQuote)!
+const const asymQuote = ''Lu'''!
+assertEq("asymmetric quotes", "Lu", asymQuote)!
+const const escapedNewline = "a\nb"!
+const const literalNewline = "a
+b"!
+assertEq("escape newline", literalNewline, escapedNewline)!
+const const interpName = "world"!
+assertEq("string interpolation", "Hello world", "Hello ${interpName}")!
+printsl("printsl ok")!
+print("")!
 
 print("")!
 
