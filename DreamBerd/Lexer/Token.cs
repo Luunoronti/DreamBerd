@@ -70,6 +70,7 @@ namespace DreamberdInterpreter
         WrapSymbol,       // ↻
         ClampKeyword,
         WrapKeyword,
+        Ellipsis,
         RangeDots,
         At,
 

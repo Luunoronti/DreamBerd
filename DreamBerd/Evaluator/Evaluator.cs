@@ -183,6 +183,211 @@ namespace DreamberdInterpreter
             }
         }
 
+        private IReadOnlyCollection<string> CollectPatternWhenDependencies(Expression target, Pattern pattern, Expression? guard)
+        {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            CollectDependencies(target, set, isCallee: false);
+            CollectPatternDependencies(pattern, set);
+            CollectDependencies(guard, set, isCallee: false);
+
+            if (set.Count == 0)
+                set.Add(WhenWildcard);
+
+            return set;
+        }
+
+        private void CollectPatternDependencies(Pattern pattern, HashSet<string> deps)
+        {
+            switch (pattern)
+            {
+                case BindingPattern bp:
+                    CollectDependencies(bp.DefaultExpression, deps, isCallee: false);
+                    break;
+                case ArrayPattern ap:
+                    foreach (var el in ap.Elements)
+                        CollectPatternDependencies(el, deps);
+                    if (ap.Rest != null)
+                        CollectPatternDependencies(ap.Rest, deps);
+                    break;
+                case ObjectPattern op:
+                    foreach (var prop in op.Properties)
+                    {
+                        CollectPatternDependencies(prop.ValuePattern, deps);
+                        CollectDependencies(prop.DefaultExpression, deps, isCallee: false);
+                    }
+                    break;
+            }
+        }
+
+        private void BindBindingPattern(BindingPattern bp, Value value, Dictionary<string, Value> bindings)
+        {
+            Value finalVal = value;
+            if (finalVal.Kind == ValueKind.Undefined && bp.DefaultExpression != null)
+            {
+                finalVal = EvaluateExpression(bp.DefaultExpression);
+            }
+
+            if (!bp.Ignore)
+            {
+                bindings[bp.Name] = finalVal;
+            }
+        }
+
+        private bool TryMatchPattern(Value value, Pattern pattern, Dictionary<string, Value> bindings, bool strict)
+        {
+            switch (pattern)
+            {
+                case BindingPattern bp:
+                    BindBindingPattern(bp, value, bindings);
+                    return true;
+
+                case ArrayPattern ap:
+                    return MatchArrayPattern(value, ap, bindings, strict);
+
+                case ObjectPattern op:
+                    return MatchObjectPattern(value, op, bindings, strict);
+
+                default:
+                    return false;
+            }
+        }
+
+        private bool MatchArrayPattern(Value value, ArrayPattern pattern, Dictionary<string, Value> bindings, bool strict)
+        {
+            if (value.Kind != ValueKind.Array || value.Array == null)
+            {
+                if (strict)
+                    return false;
+
+                foreach (var el in pattern.Elements)
+                    TryMatchPattern(Value.Undefined, el, bindings, strict: false);
+
+                if (pattern.Rest != null)
+                    BindBindingPattern(pattern.Rest, Value.FromArray(new Dictionary<double, Value>()), bindings);
+
+                return true;
+            }
+
+            var array = value.Array;
+
+            for (int i = 0; i < pattern.Elements.Count; i++)
+            {
+                double idx = i - 1;
+                Value elementVal = array.TryGetValue(idx, out var found) ? found : Value.Undefined;
+                TryMatchPattern(elementVal, pattern.Elements[i], bindings, strict);
+            }
+
+            if (pattern.Rest != null)
+            {
+                var restDict = new Dictionary<double, Value>();
+                var keys = new List<double>(array.Keys);
+                keys.Sort();
+
+                var consumed = new HashSet<double>();
+                for (int i = 0; i < pattern.Elements.Count; i++)
+                    consumed.Add(i - 1);
+
+                double restIndex = -1;
+                foreach (var k in keys)
+                {
+                    if (consumed.Contains(k))
+                        continue;
+
+                    restDict[restIndex] = array[k];
+                    restIndex++;
+                }
+
+                BindBindingPattern(pattern.Rest, Value.FromArray(restDict), bindings);
+            }
+
+            return true;
+        }
+
+        private bool MatchObjectPattern(Value value, ObjectPattern pattern, Dictionary<string, Value> bindings, bool strict)
+        {
+            if (value.Kind != ValueKind.Object || value.Object == null)
+            {
+                if (strict)
+                    return false;
+
+                foreach (var prop in pattern.Properties)
+                {
+                    Value propVal = prop.DefaultExpression != null
+                        ? EvaluateExpression(prop.DefaultExpression)
+                        : Value.Undefined;
+
+                    TryMatchPattern(propVal, prop.ValuePattern, bindings, strict: false);
+                }
+
+                return true;
+            }
+
+            var instance = value.Object;
+
+            foreach (var prop in pattern.Properties)
+            {
+                Value propVal = GetObjectMember(instance, prop.Key);
+                if (propVal.Kind == ValueKind.Undefined && prop.DefaultExpression != null)
+                    propVal = EvaluateExpression(prop.DefaultExpression);
+
+                if (!TryMatchPattern(propVal, prop.ValuePattern, bindings, strict))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private void RunWithPatternBindings(IReadOnlyDictionary<string, Value> bindings, Action action)
+        {
+            if (_callStack.Count > 0)
+            {
+                var frame = _callStack.Peek();
+                var previous = new Dictionary<string, (bool existed, Value value)>(StringComparer.Ordinal);
+
+                foreach (var kvp in bindings)
+                {
+                    if (frame.Locals.TryGetValue(kvp.Key, out var oldVal))
+                        previous[kvp.Key] = (true, oldVal);
+                    else
+                        previous[kvp.Key] = (false, Value.Undefined);
+
+                    frame.Locals[kvp.Key] = kvp.Value;
+                }
+
+                try
+                {
+                    action();
+                }
+                finally
+                {
+                    foreach (var kvp in bindings)
+                    {
+                        var info = previous[kvp.Key];
+                        if (info.existed)
+                            frame.Locals[kvp.Key] = info.value;
+                        else
+                            frame.Locals.Remove(kvp.Key);
+                    }
+                }
+            }
+            else
+            {
+                var frame = new CallFrame();
+                foreach (var kvp in bindings)
+                    frame.Locals[kvp.Key] = kvp.Value;
+
+                _callStack.Push(frame);
+                try
+                {
+                    action();
+                }
+                finally
+                {
+                    _callStack.Pop();
+                }
+            }
+        }
+
         private void OnVariableMutated(string variableName)
         {
             if (string.IsNullOrEmpty(variableName))
@@ -226,10 +431,20 @@ namespace DreamberdInterpreter
 
                     foreach (var sub in toRun)
                     {
-                        Value condVal = EvaluateExpression(sub.Condition);
-                        if (condVal.IsTruthy())
+                        if (sub.Pattern == null)
                         {
-                            EvaluateStatement(sub.Body);
+                            if (sub.Condition == null)
+                                continue;
+
+                            Value condVal = EvaluateExpression(sub.Condition);
+                            if (condVal.IsTruthy())
+                            {
+                                EvaluateStatement(sub.Body);
+                            }
+                        }
+                        else
+                        {
+                            ExecutePatternWhen(sub);
                         }
                     }
                 }
@@ -239,6 +454,29 @@ namespace DreamberdInterpreter
                 _dispatchingWhen = false;
                 _whenMutationQueue.Clear();
             }
+        }
+
+        private void ExecutePatternWhen(WhenSubscription sub)
+        {
+            if (sub.Target == null || sub.Pattern == null)
+                return;
+
+            Value targetVal = EvaluateExpression(sub.Target);
+            var bindings = new Dictionary<string, Value>(StringComparer.Ordinal);
+            if (!TryMatchPattern(targetVal, sub.Pattern, bindings, strict: true))
+                return;
+
+            RunWithPatternBindings(bindings, () =>
+            {
+                if (sub.Guard != null)
+                {
+                    Value guardVal = EvaluateExpression(sub.Guard);
+                    if (!guardVal.IsTruthy())
+                        return;
+                }
+
+                EvaluateStatement(sub.Body);
+            });
         }
 
         private void ClearFieldHistoryForClass(string className)

@@ -261,6 +261,105 @@ namespace DreamberdInterpreter
         }
     }
 
+    // Patterns ----------------------------------------------------------
+    public abstract class Pattern
+    {
+        public int Position { get; }
+        protected Pattern(int position) => Position = position;
+    }
+
+    public sealed class BindingPattern : Pattern
+    {
+        public string Name { get; }
+        public Expression? DefaultExpression { get; }
+        public bool Ignore { get; }
+
+        public BindingPattern(string name, Expression? defaultExpression, bool ignore, int position)
+            : base(position)
+        {
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+            DefaultExpression = defaultExpression;
+            Ignore = ignore;
+        }
+    }
+
+    public sealed class ArrayPattern : Pattern
+    {
+        public IReadOnlyList<Pattern> Elements { get; }
+        public BindingPattern? Rest { get; }
+
+        public ArrayPattern(IReadOnlyList<Pattern> elements, BindingPattern? rest, int position)
+            : base(position)
+        {
+            Elements = elements ?? throw new ArgumentNullException(nameof(elements));
+            Rest = rest;
+        }
+    }
+
+    public sealed class ObjectPropertyPattern
+    {
+        public string Key { get; }
+        public Pattern ValuePattern { get; }
+        public Expression? DefaultExpression { get; }
+
+        public ObjectPropertyPattern(string key, Pattern valuePattern, Expression? defaultExpression)
+        {
+            Key = key ?? throw new ArgumentNullException(nameof(key));
+            ValuePattern = valuePattern ?? throw new ArgumentNullException(nameof(valuePattern));
+            DefaultExpression = defaultExpression;
+        }
+    }
+
+    public sealed class ObjectPattern : Pattern
+    {
+        public IReadOnlyList<ObjectPropertyPattern> Properties { get; }
+
+        public ObjectPattern(IReadOnlyList<ObjectPropertyPattern> properties, int position)
+            : base(position)
+        {
+            Properties = properties ?? throw new ArgumentNullException(nameof(properties));
+        }
+    }
+
+    // Destructuring declarations/when-patterns --------------------------
+    public sealed class DestructuringVariableDeclarationStatement : Statement
+    {
+        public Pattern Pattern { get; }
+        public Expression Initializer { get; }
+        public Mutability Mutability { get; }
+        public DeclarationKind DeclarationKind { get; }
+        public LifetimeSpecifier Lifetime { get; }
+        public int Priority { get; }
+
+        public DestructuringVariableDeclarationStatement(Pattern pattern, Expression initializer, Mutability mutability, DeclarationKind declarationKind, LifetimeSpecifier lifetime, int priority, int position)
+            : base(position)
+        {
+            Pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
+            Initializer = initializer ?? throw new ArgumentNullException(nameof(initializer));
+            Mutability = mutability;
+            DeclarationKind = declarationKind;
+            Lifetime = lifetime;
+            Priority = priority;
+        }
+    }
+
+    public sealed class PatternWhenStatement : Statement
+    {
+        public Expression Target { get; }
+        public Pattern Pattern { get; }
+        public Expression? Guard { get; }
+        public Statement Body { get; }
+
+        public PatternWhenStatement(Expression target, Pattern pattern, Expression? guard, Statement body, int position)
+            : base(position)
+        {
+            Target = target ?? throw new ArgumentNullException(nameof(target));
+            Pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
+            Guard = guard;
+            Body = body ?? throw new ArgumentNullException(nameof(body));
+        }
+    }
+
     public sealed class IfStatement : Statement
     {
         public Expression Condition { get; }

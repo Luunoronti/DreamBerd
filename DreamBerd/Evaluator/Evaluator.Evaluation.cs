@@ -186,6 +186,12 @@ namespace DreamberdInterpreter
 
                         return Value.Null;
                     }
+                case DestructuringVariableDeclarationStatement dvds:
+                    {
+                        Value initVal = EvaluateExpression(dvds.Initializer);
+                        ApplyPatternDeclaration(dvds.Pattern, initVal, dvds.Mutability, dvds.DeclarationKind, dvds.Priority, dvds.Lifetime, dvds.Position);
+                        return Value.Null;
+                    }
 
                 case ExpressionStatement es:
                     {
@@ -219,6 +225,14 @@ namespace DreamberdInterpreter
                     {
                         var deps = CollectConditionDependencies(ws.Condition);
                         var sub = new WhenSubscription(ws.Condition, ws.Body, deps);
+                        RegisterWhenSubscription(sub);
+                        return Value.Null;
+                    }
+
+                case PatternWhenStatement pws:
+                    {
+                        var deps = CollectPatternWhenDependencies(pws.Target, pws.Pattern, pws.Guard);
+                        var sub = new WhenSubscription(null, pws.Target, pws.Pattern, pws.Guard, pws.Body, deps);
                         RegisterWhenSubscription(sub);
                         return Value.Null;
                     }
@@ -399,6 +413,32 @@ case TryAgainStatement tas:
 
                 default:
                     throw new InterpreterException($"Unknown statement type: {statement.GetType().Name}.", statement.Position);
+            }
+        }
+
+        private void ApplyPatternDeclaration(Pattern pattern, Value value, Mutability mutability, DeclarationKind declarationKind, int priority, LifetimeSpecifier lifetime, int position)
+        {
+            var bindings = new Dictionary<string, Value>(StringComparer.Ordinal);
+            TryMatchPattern(value, pattern, bindings, strict: false);
+
+            if (priority <= 0)
+                priority = 1;
+
+            foreach (var kvp in bindings)
+            {
+                string name = kvp.Key;
+                Value boundValue = kvp.Value;
+
+                if (declarationKind == DeclarationKind.ConstConstConst)
+                {
+                    _constStore.Define(name, boundValue);
+                }
+                else
+                {
+                    _variables.Declare(name, mutability, boundValue, priority, lifetime, _currentStatementIndex);
+                }
+
+                OnVariableMutated(name);
             }
         }
 

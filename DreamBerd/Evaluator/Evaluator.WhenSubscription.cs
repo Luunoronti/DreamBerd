@@ -5,7 +5,19 @@ namespace DreamberdInterpreter
     {
         private sealed class WhenSubscription
         {
-            public Expression Condition
+            public Expression? Condition
+            {
+                get;
+            }
+            public Expression? Target
+            {
+                get;
+            }
+            public Pattern? Pattern
+            {
+                get;
+            }
+            public Expression? Guard
             {
                 get;
             }
@@ -19,8 +31,16 @@ namespace DreamberdInterpreter
             }
 
             public WhenSubscription(Expression condition, Statement body, IReadOnlyCollection<string> dependencies)
+                : this(condition, null, null, null, body, dependencies)
             {
-                Condition = condition ?? throw new ArgumentNullException(nameof(condition));
+            }
+
+            public WhenSubscription(Expression? condition, Expression? target, Pattern? pattern, Expression? guard, Statement body, IReadOnlyCollection<string> dependencies)
+            {
+                Condition = condition;
+                Target = target;
+                Pattern = pattern;
+                Guard = guard;
                 Body = body ?? throw new ArgumentNullException(nameof(body));
                 Dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
             }

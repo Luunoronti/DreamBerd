@@ -478,6 +478,58 @@ assertEq("fallback on missing field => 404", 404, Static["missing"])!
 print("")!
 
 // --------------------------------------------
+print("== 20) Patterns & destructuring ==")!
+// --------------------------------------------
+var var [aPat, bPat] = [10, 20]!
+assertEq("destruct [aPat,bPat] from [10,20] => aPat==10", 10, aPat)!
+assertEq("destruct [aPat,bPat] from [10,20] => bPat==20", 20, bPat)!
+
+var var arrDef = [undefined]!
+var var [dx = 5, dy = 7] = arrDef!
+assertEq("array default dx=5 when element undefined", 5, dx)!
+assertEq("array default dy=7 when missing", 7, dy)!
+
+var var [headPat, ...tailPat] = [1, 2, 3]!
+assertEq("head from [1,2,3] => 1", 1, headPat)!
+assertEq("tail[-1] from [1,2,3] => 2", 2, tailPat[-1])!
+assertEq("tail[0] from [1,2,3] => 3", 3, tailPat[0])!
+
+var var [_, keepPat] = [42, 7]!
+assertEq("ignore first elem with _ => keepPat==7", 7, keepPat)!
+
+PatternObj is a class {
+    foo : default 10!
+    bar : default 20!
+}
+
+var var {foo: fooPat, bar: barAlias, missing = 99} = PatternObj!
+assertEq("{foo,...} => fooPat==10", 10, fooPat)!
+assertEq("{bar: barAlias,...} => barAlias==20", 20, barAlias)!
+assertEq("object pattern default for missing => 99", 99, missing)!
+
+var var pairPat = [5, 1]!
+var var patternHit = 0!
+when pairPat matches [xPat, yPat] where xPat > yPat { patternHit = xPat - yPat! }
+pairPat = [2, 10]!
+assertEq("pattern when guard false keeps patternHit==0", 0, patternHit)!
+pairPat = [9, 3]!
+assertEq("pattern when guard true updates to 6", 6, patternHit)!
+
+Watcher is a class {
+    left : default 1!
+    right : default 2!
+}
+
+var var objHit = 0!
+when Watcher matches { left: lVal, right: rVal } where rVal > lVal { objHit = rVal - lVal! }
+Watcher["left"] = 12!
+assertEq("object pattern when guard false keeps objHit==0", 0, objHit)!
+Watcher["right"] = 20!
+assertEq("object pattern when guard true => objHit==8", 8, objHit)!
+
+print("")!
+
+// --------------------------------------------
 print("== Summary ==")!
 print("passed: " + passed)!
 print("failed: " + failed)!

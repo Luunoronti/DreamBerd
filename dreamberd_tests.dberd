@@ -478,6 +478,58 @@ assertEq("fallback przy brakujacym fieldzie => 404", 404, Static["missing"])!
 print("")!
 
 // --------------------------------------------
+print("== 20) Wzorce i destrukturyzacja ==")!
+// --------------------------------------------
+var var [aPat, bPat] = [10, 20]!
+assertEq("destrukturyzacja [aPat,bPat] z [10,20] => aPat==10", 10, aPat)!
+assertEq("destrukturyzacja [aPat,bPat] z [10,20] => bPat==20", 20, bPat)!
+
+var var arrDef = [undefined]!
+var var [dx = 5, dy = 7] = arrDef!
+assertEq("domyslna wartosc dx=5 gdy element undefined", 5, dx)!
+assertEq("domyslna wartosc dy=7 gdy brak elementu", 7, dy)!
+
+var var [headPat, ...tailPat] = [1, 2, 3]!
+assertEq("head z [1,2,3] => 1", 1, headPat)!
+assertEq("tail[-1] z [1,2,3] => 2", 2, tailPat[-1])!
+assertEq("tail[0] z [1,2,3] => 3", 3, tailPat[0])!
+
+var var [_, keepPat] = [42, 7]!
+assertEq("podkreslnik ignoruje pierwszy, keepPat==7", 7, keepPat)!
+
+PatternObj is a class {
+    foo : default 10!
+    bar : default 20!
+}
+
+var var {foo: fooPat, bar: barAlias, missing = 99} = PatternObj!
+assertEq("{foo,...} => fooPat==10", 10, fooPat)!
+assertEq("{bar: barAlias,...} => barAlias==20", 20, barAlias)!
+assertEq("object pattern default dla missing => 99", 99, missing)!
+
+var var pairPat = [5, 1]!
+var var patternHit = 0!
+when pairPat matches [xPat, yPat] where xPat > yPat { patternHit = xPat - yPat! }
+pairPat = [2, 10]!
+assertEq("pattern when guard false zostawia patternHit==0", 0, patternHit)!
+pairPat = [9, 3]!
+assertEq("pattern when guard true ustawia 6", 6, patternHit)!
+
+Watcher is a class {
+    left : default 1!
+    right : default 2!
+}
+
+var var objHit = 0!
+when Watcher matches { left: lVal, right: rVal } where rVal > lVal { objHit = rVal - lVal! }
+Watcher["left"] = 12!
+assertEq("object pattern when guard false objHit==0", 0, objHit)!
+Watcher["right"] = 20!
+assertEq("object pattern when guard true => objHit==8", 8, objHit)!
+
+print("")!
+
+// --------------------------------------------
 print("== Summary ==")!
 print("passed: " + passed)!
 print("failed: " + failed)!

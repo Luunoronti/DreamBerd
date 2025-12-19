@@ -9,6 +9,7 @@ namespace DreamberdInterpreter
 
         private readonly Stack<HashSet<string>> _scopeStack = new Stack<HashSet<string>>();
         private bool _allowStatementKeywordsAsArgs = true;
+        private bool _inWhenCondition;
 
         private static readonly Dictionary<string, ulong> NumberUnits = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
         {
@@ -684,6 +685,26 @@ namespace DreamberdInterpreter
                 else mutability = Mutability.VarVar;
             }
 
+            // Destructuring variant: starts with '[' or '{'
+            if (Check(TokenType.LeftBracket) || Check(TokenType.LeftBrace))
+            {
+                Pattern pattern = ParsePattern();
+
+                LifetimeSpecifier lifetimeD = LifetimeSpecifier.None;
+                if (Match(TokenType.Less))
+                {
+                    lifetimeD = ParseLifetimeSpecifier();
+                }
+
+                Consume(TokenType.Assign, "Expected '=' after destructuring pattern.");
+                Expression initExpr = ParseExpression();
+
+                var termD = ParseTerminator();
+                int priorityD = termD.IsDebug ? 1 : termD.ExclamationCount;
+
+                return new DestructuringVariableDeclarationStatement(pattern, initExpr, mutability, declKind, lifetimeD, priorityD, position);
+            }
+
             Token nameTok = ConsumeNameToken("Expected variable name.");
             string name = TokenToName(nameTok);
 
@@ -731,12 +752,153 @@ namespace DreamberdInterpreter
                 return LifetimeSpecifier.Lines(value);
         }
 
+        // ---------------- Patterns ----------------
+        private Pattern ParsePattern()
+        {
+            if (Match(TokenType.LeftBracket))
+                return ParseArrayPattern(Previous().Position);
+            if (Match(TokenType.LeftBrace))
+                return ParseObjectPattern(Previous().Position);
+
+            return ParseBindingPattern();
+        }
+
+        private Pattern ParseBindingPattern()
+        {
+            Token nameTok = ConsumeNameToken("Expected identifier in pattern.");
+            string name = TokenToName(nameTok);
+
+            Expression? def = null;
+            if (Match(TokenType.Assign))
+            {
+                def = ParseExpression();
+            }
+
+            bool ignore = string.Equals(name, "_", StringComparison.Ordinal);
+            return new BindingPattern(name, def, ignore, nameTok.Position);
+        }
+
+        private Pattern ParseArrayPattern(int startPos)
+        {
+            var elements = new List<Pattern>();
+            BindingPattern? rest = null;
+
+            if (!Check(TokenType.RightBracket))
+            {
+                while (true)
+                {
+                    if (Match(TokenType.Ellipsis))
+                    {
+                        rest = ParseBindingPattern() as BindingPattern;
+                        if (rest == null)
+                            Fatal(Peek(), "Invalid rest pattern.");
+                        break;
+                    }
+
+                    elements.Add(ParsePattern());
+
+                    if (Match(TokenType.Comma))
+                        continue;
+                    break;
+                }
+            }
+
+            Consume(TokenType.RightBracket, "Expected ']' to close array pattern.");
+            return new ArrayPattern(elements, rest, startPos);
+        }
+
+        private Pattern ParseObjectPattern(int startPos)
+        {
+            var props = new List<ObjectPropertyPattern>();
+
+            if (!Check(TokenType.RightBrace))
+            {
+                while (true)
+                {
+                    Token keyTok = ConsumeNameToken("Expected property name in pattern.");
+                    string key = TokenToName(keyTok);
+
+                    Pattern valuePat;
+                    Expression? def = null;
+
+                    if (Match(TokenType.Colon))
+                    {
+                        valuePat = ParsePattern();
+                    }
+                    else
+                    {
+                        valuePat = new BindingPattern(key, null, string.Equals(key, "_", StringComparison.Ordinal), keyTok.Position);
+                    }
+
+                    if (Match(TokenType.Assign))
+                        def = ParseExpression();
+
+                    props.Add(new ObjectPropertyPattern(key, valuePat, def));
+
+                    if (Match(TokenType.Comma))
+                        continue;
+                    break;
+                }
+            }
+
+            Consume(TokenType.RightBrace, "Expected '}' to close object pattern.");
+            return new ObjectPattern(props, startPos);
+        }
+
         private Statement ParseWhenStatement(int position)
         {
             bool prevAllow = _allowStatementKeywordsAsArgs;
+            bool prevInWhenCondition = _inWhenCondition;
             _allowStatementKeywordsAsArgs = false;
+            _inWhenCondition = true;
             Expression condition = ParseExpression();
             _allowStatementKeywordsAsArgs = prevAllow;
+            _inWhenCondition = prevInWhenCondition;
+
+            bool hasMatchesKeyword = Check(TokenType.Identifier) && string.Equals(Peek().Lexeme, "matches", StringComparison.Ordinal);
+            bool conditionConsumedMatches = false;
+
+            if (!hasMatchesKeyword &&
+                condition is CallExpression call &&
+                call.Arguments.Count == 1 &&
+                call.Arguments[0] is IdentifierExpression idArg &&
+                string.Equals(idArg.Name, "matches", StringComparison.Ordinal) &&
+                (Check(TokenType.LeftBrace) || Check(TokenType.LeftBracket)))
+            {
+                condition = call.Callee;
+                conditionConsumedMatches = true;
+                hasMatchesKeyword = true;
+            }
+
+            // Pattern form: when <expr> matches <pattern> [where <guard>] { ... }
+            if (hasMatchesKeyword)
+            {
+                if (!conditionConsumedMatches)
+                    Advance(); // matches
+                Pattern pat = ParsePattern();
+
+                Expression? guard = null;
+                if (Check(TokenType.Identifier) && string.Equals(Peek().Lexeme, "where", StringComparison.Ordinal))
+                {
+                    Advance();
+                    guard = ParseExpression();
+                }
+
+                Statement bodyStmtPattern;
+                if (Match(TokenType.LeftBrace))
+                {
+                    int blockPos = Previous().Position;
+                    bodyStmtPattern = ParseBlockStatementAfterOpeningBrace(blockPos);
+                }
+                else
+                {
+                    Expression bodyExpr = ParseExpression();
+                    bool isDebugBody = ParseTerminatorIsDebug();
+                    bodyStmtPattern = new ExpressionStatement(bodyExpr, isDebugBody, bodyExpr.Position);
+                }
+
+                return new PatternWhenStatement(condition, pat, guard, bodyStmtPattern, position);
+            }
 
             // Na razie wspieramy:
             // when (cond) expr!
@@ -1617,6 +1779,11 @@ Expression ParsePower()
                 if (!IsArgumentStart(nextType) && !startsRangeArgument)
                     return false;
 
+                if (_inWhenCondition &&
+                    Peek().Type == TokenType.Identifier &&
+                    string.Equals(Peek().Lexeme, "matches", StringComparison.Ordinal))
+                    return false;
+
                 // '[' bez odstępu po callee to index, nie argument
                 if (Peek().Type == TokenType.LeftBracket &&
                     HasNoRealSpacesBetweenTokens(_current - 1, _current))
@@ -1626,20 +1793,20 @@ Expression ParsePower()
                 do
                 {
                     args.Add(ParseAssignment());
-                } while (Match(TokenType.Comma));
+            } while (Match(TokenType.Comma));
 
-                int callPos = args.Count > 0 ? args[0].Position : target.Position;
-                target = new CallExpression(target, args, callPos);
-                return true;
-            }
+            int callPos = args.Count > 0 ? args[0].Position : target.Position;
+            target = new CallExpression(target, args, callPos);
+            return true;
+        }
 
-            bool IsArgumentStart(TokenType type) =>
-                (IsNameTokenType(type) && (_allowStatementKeywordsAsArgs || !IsStatementKeywordToken(type))) ||
-                type == TokenType.Semicolon ||
-                type == TokenType.LeftBracket;
+        bool IsArgumentStart(TokenType type) =>
+            (IsNameTokenType(type) && (_allowStatementKeywordsAsArgs || !IsStatementKeywordToken(type))) ||
+            type == TokenType.Semicolon ||
+            type == TokenType.LeftBracket;
 
 
-            // postfix power UPDATE: **, ****, ******, ...
+        // postfix power UPDATE: **, ****, ******, ...
             // DreamBerd twist (like ++++): operator is repeated "**" pairs.
             // Exponent = 1 + (starCount / 2).
             // Examples:

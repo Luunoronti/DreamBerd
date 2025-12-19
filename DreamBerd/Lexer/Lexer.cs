@@ -237,7 +237,12 @@ namespace DreamberdInterpreter
                     break;
                 case '.':
                     if (Match('.'))
-                        AddToken(TokenType.RangeDots);
+                    {
+                        if (Match('.'))
+                            AddToken(TokenType.Ellipsis);
+                        else
+                            AddToken(TokenType.RangeDots);
+                    }
                     else
                         throw new InterpreterException("Unexpected '.'.", _current - 1);
                     break;
