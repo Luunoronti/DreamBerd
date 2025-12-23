@@ -6,6 +6,7 @@ function assertEq (name, expected, actual) =>
 
 // Day 01 / Part 1 (DreamBerd edition)
 // "The safe is a decoy"
+// https://adventofcode.com/2025/day/1
 
 // Input: file "01_01_test.txt"
 // Each line: L<number> or R<number>.
