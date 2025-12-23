@@ -55,7 +55,7 @@ Legenda:
 - ✅ Przypisanie: `x = expr`.
 - ✅ Przypisanie indeksu: `arr[idx] = expr`.
 - ✅ Update statements `x :+ y!`, `:-`, `:*`, `:/`, `:%`, `:??`, `:<`, `:>`, bitowe `:& :| :^ :<< :>>`, potęgi `:**!`, pierwiastki `:\\!` itd.
-- ✅ Dodatkowe operatory: abs `||x`; trygonometria `~x`/`~~x`/`~~~x`; aliasy min/max `<>` `><` `⌊⌋` `⌈⌉`; clamp/wrap `▷`/`↻` i słowne `clamp`/`wrap` z zakresami na nawiasach kwadratowych `[lo .. hi]`/`]lo .. hi[`, plus update `:▷` / `:↻` (wrap obsługuje opcjonalną deltę przed `@`).
+- ✅ Dodatkowe operatory: abs `||x`; trygonometria `~x`/`~~x`/`~~~x`; aliasy min/max `<>` `><` `⌊⌋` `⌈⌉`; clamp/wrap `▷`/`↻` i słowne `clamp`/`wrap` z zakresami na nawiasach kwadratowych `[lo .. hi]`/`[lo .. hi[`/`]lo .. hi]`/`]lo .. hi[`, plus update `:▷` / `:↻` (wrap obsługuje opcjonalną deltę przed `@`).
 
 ### Operator warunkowy (4 gałęzie)
 - ✅ `cond ? whenTrue`

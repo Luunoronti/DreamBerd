@@ -9,6 +9,7 @@ namespace DreamberdInterpreter
         private readonly Stack<HashSet<string>> _scopeStack = new Stack<HashSet<string>>();
         private bool _allowStatementKeywordsAsArgs = true;
         private bool _inWhenCondition;
+        private int _rangeUpperDepth;
 
         private static readonly Dictionary<string, ulong> NumberUnits = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase)
         {
@@ -343,6 +344,17 @@ namespace DreamberdInterpreter
             || type == TokenType.LeftParen
             || type == TokenType.LeftBracket
             || type == TokenType.RightBracket;
+
+        private bool IsExpressionStart(TokenType type) =>
+            IsNameTokenType(type)
+            || type == TokenType.LeftParen
+            || type == TokenType.LeftBracket
+            || type == TokenType.RightBracket
+            || type == TokenType.Root
+            || type == TokenType.DoublePipe
+            || type == TokenType.Tilde
+            || type == TokenType.Semicolon
+            || type == TokenType.Minus;
 
         private Statement ParseStatement()
         {
@@ -1528,6 +1540,15 @@ namespace DreamberdInterpreter
             return true;
         }
 
+        private bool IsRangeUpperCloseCandidate(int leftBracketIndex)
+        {
+            int nextIndex = leftBracketIndex + 1;
+            if (nextIndex >= _tokens.Count)
+                return true;
+
+            return !IsExpressionStart(_tokens[nextIndex].Type);
+        }
+
         private Expression ParseEquality()
         {
             Expression expr = ParseComparison();
@@ -1820,6 +1841,9 @@ Expression ParsePower()
                 if (Check(TokenType.LeftBracket) &&
                     HasNoRealSpacesBetweenTokens(_current - 1, _current))
                 {
+                    if (_rangeUpperDepth > 0 && IsRangeUpperCloseCandidate(_current))
+                        break;
+
                     Advance(); // consume '['
                     var indexExpr = ParseAssignment();
                     Consume(TokenType.RightBracket, "Expected ']' after index expression.");
@@ -2068,7 +2092,7 @@ Expression ParsePower()
         {
             Expression lower = ParseExpression();
             Consume(TokenType.RangeDots, "Expected '..' in range literal.");
-            Expression upper = ParseExpression();
+            Expression upper = ParseRangeUpperExpression();
 
             bool includeUpper;
             if (Match(TokenType.RightBracket))
@@ -2085,6 +2109,19 @@ Expression ParsePower()
             }
 
             return new RangeExpression(lower, upper, includeLower, includeUpper, startPosition);
+        }
+
+        private Expression ParseRangeUpperExpression()
+        {
+            _rangeUpperDepth++;
+            try
+            {
+                return ParseExpression();
+            }
+            finally
+            {
+                _rangeUpperDepth--;
+            }
         }
 
         private bool TryParseNumberNameLiteral(out ulong value, out int consumedTokens, out int literalPosition, out bool fallbackToString, out int fallbackStartIndex)

@@ -372,6 +372,10 @@ assertEq("-1 ▷ [0 .. 10] => 0", 0, -1 ▷ [0 .. 10])!
 assertEq("15 clamp [0 .. 10] => 10", 10, 15 clamp [0 .. 10])!
 assertEq("-7 ↻ [0 .. 100] => 93", 93, -7 ↻ [0 .. 100])!
 assertEq("95 wrap [0 .. 100] => 95", 95, 95 wrap [0 .. 100])!
+assertEq("100 wrap [0 .. 100[ => 0", 0, 100 wrap [0 .. 100[)!
+assertTrue("10 clamp [0 .. 10[ < 10", (10 clamp [0 .. 10[) < 10)!
+assertTrue("0 clamp ]0 .. 10] > 0", (0 clamp ]0 .. 10]) > 0)!
+assertTrue("0 clamp ]0 .. 10[ < 10", (0 clamp ]0 .. 10[) < 10)!
 
 var var wrapUpd = 0!
 wrapUpd :↻ -7 @ [0 .. 100]!

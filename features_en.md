@@ -52,7 +52,7 @@ Legend:
 - ✅ Assignment: `x = expr`.
 - ✅ Index assignment: `arr[idx] = expr`.
 - ✅ Update statements `x :+ y!`, `:-`, `:*`, `:/`, `:%`, `:??`, `:<`, `:>`, bitwise `:& :| :^ :<< :>>`, power run `:**!`, root run `:\\!`, etc.
-- ✅ Extra operators: abs `||x`; trig `~x`/`~~x`/`~~~x`; min/max aliases `<>` `><` `⌊⌋` `⌈⌉`; clamp/wrap `▷`/`↻` and keywords `clamp`/`wrap` with square-bracket ranges `[lo .. hi]`/`]lo .. hi[`, plus updates `:▷` / `:↻` (wrap supports optional delta before `@`).
+- ✅ Extra operators: abs `||x`; trig `~x`/`~~x`/`~~~x`; min/max aliases `<>` `><` `⌊⌋` `⌈⌉`; clamp/wrap `▷`/`↻` and keywords `clamp`/`wrap` with square-bracket ranges `[lo .. hi]`/`[lo .. hi[`/`]lo .. hi]`/`]lo .. hi[`, plus updates `:▷` / `:↻` (wrap supports optional delta before `@`).
 
 ### Conditional operator (4 branches)
 - ✅ `cond ? whenTrue`
