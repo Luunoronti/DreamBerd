@@ -558,6 +558,7 @@ print("== 21) File sections + export/import ==")!
 // --------------------------------------------
 const const sharedValue = 123!
 function add a, b => a + b!
+var var leak = 42!
 
 ExportClass is a class {
     value : default 7!
@@ -568,6 +569,7 @@ export add to "main.gom"!
 export ExportClass to "main.gom"!
 
 ===== main.gom ==
+assertEq("file sections reset scope", "leak", leak)!
 import sharedValue!
 import add!
 import ExportClass!

@@ -84,6 +84,36 @@ namespace DreamberdInterpreter
             RegisterStdLibDefaultMethods();
         }
 
+        public void ResetNonConstState(bool preserveExports = true)
+        {
+            _variables.Clear();
+            _deletedNumbers.Clear();
+            _deletedStrings.Clear();
+            _deletedBooleans.Clear();
+
+            _currentStatementIndex = 0;
+            _loopDepth = 0;
+            _ifDepth = 0;
+
+            _whenByVariable.Clear();
+            _whenMutationQueue.Clear();
+            _dispatchingWhen = false;
+
+            _functions.Clear();
+            _classes.Clear();
+            _classInstances.Clear();
+            _fieldHistory.Clear();
+            _staticFieldHistory.Clear();
+
+            _callStack.Clear();
+            IOTotalTime = TimeSpan.Zero;
+
+            if (!preserveExports)
+            {
+                _exportsByFile.Clear();
+            }
+        }
+
         private static string NormalizeFileName(string name) =>
             string.IsNullOrWhiteSpace(name) ? string.Empty : name.Trim();
 

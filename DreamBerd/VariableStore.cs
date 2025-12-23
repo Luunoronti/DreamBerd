@@ -66,6 +66,12 @@ namespace DreamberdInterpreter
 
         private Dictionary<string, OverloadSet> CurrentScope => _scopes[_scopes.Count - 1];
 
+        public void Clear()
+        {
+            _scopes.Clear();
+            _scopes.Add(new Dictionary<string, OverloadSet>(StringComparer.Ordinal));
+        }
+
         public void PushScope()
         {
             _scopes.Add(new Dictionary<string, OverloadSet>(StringComparer.Ordinal));

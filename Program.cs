@@ -92,9 +92,15 @@ namespace DreamberdInterpreter
 
         private static bool RunSource(string source, Evaluator evaluator, string defaultName)
         {
-            var sections = SplitSourceIntoFiles(source, defaultName);
+            var sections = SplitSourceIntoFiles(source, defaultName, out var hadSeparators);
+            bool firstSection = true;
             foreach (var section in sections)
             {
+                if (hadSeparators)
+                {
+                    evaluator.ResetNonConstState(preserveExports: !firstSection);
+                }
+
                 evaluator.CurrentFileName = section.Name;
                 try
                 {
@@ -105,6 +111,8 @@ namespace DreamberdInterpreter
                     PrintInterpreterError(ex, section.Source, section.Name);
                     return false;
                 }
+
+                firstSection = false;
             }
 
             return true;
@@ -119,13 +127,14 @@ namespace DreamberdInterpreter
             evaluator.ExecuteProgram(program);
         }
 
-        private static IReadOnlyList<FileSection> SplitSourceIntoFiles(string source, string defaultName)
+        private static IReadOnlyList<FileSection> SplitSourceIntoFiles(string source, string defaultName, out bool hadSeparators)
         {
             var sections = new List<FileSection>();
             var current = new StringBuilder();
             string currentName = string.IsNullOrWhiteSpace(defaultName) ? "main.gom" : defaultName;
             int autoIndex = 1;
             bool hadContent = false;
+            bool foundSeparator = false;
 
             using var reader = new StringReader(source ?? string.Empty);
             string? line;
@@ -133,6 +142,7 @@ namespace DreamberdInterpreter
             {
                 if (TryParseFileSeparator(line, out var newName))
                 {
+                    foundSeparator = true;
                     if (hadContent || current.Length > 0)
                     {
                         sections.Add(new FileSection(currentName, current.ToString()));
@@ -162,6 +172,7 @@ namespace DreamberdInterpreter
                 sections.Add(new FileSection(currentName, current.ToString()));
             }
 
+            hadSeparators = foundSeparator;
             return sections;
         }
 
