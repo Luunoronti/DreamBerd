@@ -448,10 +448,10 @@ var var alias = MyClass!
 alias["val"] :+ 2!
 assertEq("alias['val'] :+ 2! => MyClass['val'] == 14", 14, MyClass["val"])!
 
-alias["set"] 10!
+alias["set"](10)!
 assertEq("alias['set'] 10! => MyClass['val'] == 10", 10, MyClass["val"])!
 
-alias["add"] 1!
+alias["add"](1)!
 assertEq("alias['add'] 1! => MyClass['val'] == 11", 11, MyClass["val"])!
 
 assertEq("history(MyClass['val'])[-1] => undefined", undefined, history(MyClass["val"])[-1])!
@@ -466,10 +466,10 @@ Ctor is a class {
 }
 
 assertEq("Ctor constructor on first touch: Ctor['init'] => 1", 1, Ctor["init"])!
-Ctor["add"] 3!
+Ctor["add"](3)!
 assertEq("Ctor['add'] 3! => Ctor['init'] == 4", 4, Ctor["init"])!
 var var ctorAlias = Ctor!
-ctorAlias["add"] 1!
+ctorAlias["add"](1)!
 assertEq("Ctor singleton via alias: Ctor['init'] == 5", 5.0, Ctor["init"])!
 
 print("")!
@@ -486,10 +486,10 @@ Static is a class {
 }
 
 assertEq("auto-prop default value == 1", 1, Static["value"])!
-Static["inc"] 0!
+Static["inc"](0)!
 assertEq("auto-prop after inc() == 2", 2, Static["value"])!
 assertEq("static auto-prop default == 99", 99, Static["staticVal"])!
-Static["bump"] 1!
+Static["bump"](1)!
 assertEq("static auto-prop after bump(1) == 100", 100, Static["staticVal"])!
 Static["staticVal"] :+ 1!
 assertEq("static auto-prop after :+ 1! == 101", 101, Static["staticVal"])!
@@ -569,7 +569,7 @@ import add!
 import ExportClass!
 
 assertEq("imported value available", 123, sharedValue)!
-assertEq("imported function works", 2 + 3, add 2, 3)!
+assertEq("imported function works", 2 + 3, add(2, 3))!
 assertEq("imported class default prop", 7, ExportClass["value"])!
 
 print("")!
