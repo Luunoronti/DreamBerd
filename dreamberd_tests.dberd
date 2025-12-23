@@ -121,7 +121,7 @@ assertEq("postfix arr[i]++ zapisuje nowe", 2, arr2[-1])!
 print("")!
 
 // --------------------------------------------
-print("== 5) Historia zmiennych: previous/next/history(=="))!
+print("== 5) Historia zmiennych: previous/next/history(==")!
 // --------------------------------------------
 var var x = 1!
 x = 2!
@@ -129,19 +129,19 @@ x = 3!
 
 var var p1 = previous(x)!
 assertEq("previous(x) #1 returns 2", 2, p1)!
-assertEq("x after previous(#1 == 2", 2, x))!
+assertEq("x after previous(#1 == 2", 2, x)!
 
 var var p2 = previous(x)!
 assertEq("previous(x) #2 returns 1", 1, p2)!
-assertEq("x after previous(#2 == 1", 1, x))!
+assertEq("x after previous(#2 == 1", 1, x)!
 
 var var n1 = next(x)!
 assertEq("next(x) #1 returns 2", 2, n1)!
-assertEq("x after next(#1 == 2", 2, x))!
+assertEq("x after next(#1 == 2", 2, x)!
 
 var var n2 = next(x)!
 assertEq("next(x) #2 returns 3", 3, n2)!
-assertEq("x after next(#2 == 3", 3, x))!
+assertEq("x after next(#2 == 3", 3, x)!
 
 var var hx = history(x)!
 assertEq("history(x)[-1] == 1", 1, hx[-1])!
@@ -151,12 +151,12 @@ assertEq("history(x)[1] == 3", 3, hx[1])!
 var var k = 10!
 k = 11!
 var var prevKw = previous(k)!
-assertEq("previous(k) zwraca 10", 10, prevKw))!
-assertEq("k po previous(k) == 10", 10, k))!
+assertEq("previous(k) zwraca 10", 10, prevKw)!
+assertEq("k po previous(k) == 10", 10, k)!
 assertEq("current(k) zwraca 10", 10, current(k))!
 var var nextKw = next(k)!
-assertEq("next(k) zwraca 11", 11, nextKw))!
-assertEq("k po next(k) == 11", 11, k))!
+assertEq("next(k) zwraca 11", 11, nextKw)!
+assertEq("k po next(k) == 11", 11, k)!
 
 print("")!
 
@@ -236,7 +236,7 @@ assertEq("dwa tysiace trzy -> 2003", 2003, num_pl)!
 var var num_bad = one milion spam!
 assertEq("nieznane slowo po liczbie => string", "one milion spam", num_bad)!
 
-//assertEq("toNumber(\"123\")", 123, toNumber("123"))!
+//assertEq("toNumber(\"123\")", 123, toNumber("123")!
 assertEq("toNumber(english words)", 45, toNumber("forty five"))!
 assertEq("toNumber(polskie slowa)", 19, toNumber("dziewietnascie"))!
 assertEq("toNumber(invalid)", undefined, toNumber("foo bar"))!
@@ -411,33 +411,14 @@ assertEq("when loopX ==== 8 without () fires once => 1", 1, whenHitsNoParens)!
 
 print("")!
 
-// --------------------------------------------
-print("== 17) Rozszerzone nazwy (emoji/keyword/cyfry/puste) ==")!
-// --------------------------------------------
-assertEq("7 + 1 bez var 7 => 8", 8, 7 + 1)!
-
-function return x => x * 2!
-assertEq("function return x => x * 2! ; return 4 => 8", 8, return 4)!
-
-var var if = 3!
-assertEq("keyword if jako nazwa; if + 2 => 5", 2 + 3, if + 2)!
-
-var var 😀 = 10!
-😀 :+ 1!
-assertEq("emoji 😀 :+ 1! => 11", 11, 😀)!
-
-var var "" = 123!
-assertEq('var var "" = 123! ; "" => 123', 123, "")!
-"" :+ 1!
-assertEq('"" :+ 1! => 124', 124, "")!
 
 // --------------------------------------------
-print("== 18) Klasy singleton + pola + historia ==")!
+print("== 17) Klasy singleton + pola + historia ==")!
 // --------------------------------------------
 MyClass is a class {
     function set x => { source["val"] = x! }
     function add x => { source["val"] :+ x! }
-    function read x => return source["val"]!
+    function read x => { return source["val"] }!
 }
 
 assertEq("MyClass['val'] start => undefined", undefined, MyClass["val"])!
@@ -448,10 +429,10 @@ var var alias = MyClass!
 alias["val"] :+ 2!
 assertEq("alias['val'] :+ 2! => MyClass['val'] == 14", 14, MyClass["val"])!
 
-alias["set"] 10!
+alias["set"](10)!
 assertEq("alias['set'] 10! => MyClass['val'] == 10", 10, MyClass["val"])!
 
-alias["add"] 1!
+alias["add"](1)!
 assertEq("alias['add'] 1! => MyClass['val'] == 11", 11, MyClass["val"])!
 
 assertEq("history(MyClass['val'])[-1] => undefined", undefined, history(MyClass["val"])[-1])!
@@ -466,13 +447,34 @@ Ctor is a class {
 }
 
 assertEq("Ctor constructor przy 1. dostępie: Ctor['init'] => 1", 1, Ctor["init"])!
-Ctor["add"] 3!
+Ctor["add"](3)!
 assertEq("Ctor['add'] 3! => Ctor['init'] == 4", 4, Ctor["init"])!
 var var ctorAlias = Ctor!
-ctorAlias["add"] 1!
+ctorAlias["add"](1)!
 assertEq("Ctor singleton przez alias: Ctor['init'] == 5", 5.0, Ctor["init"])!
 
 print("")!
+
+// --------------------------------------------
+print("== 18) Rozszerzone nazwy (emoji/keyword/cyfry/puste) ==")!
+// --------------------------------------------
+assertEq("7 + 1 bez var 7 => 8", 8, 7 + 1)!
+
+function return x => x * 2!
+assertEq("function return x => x * 2! ; return 4 => 8", 8, return(4))!
+
+var var if = 3!
+assertEq("keyword if jako nazwa; if + 2 => 5", 2 + 3, if + 2)!
+
+var var 😀 = 10!
+😀 :+ 1!
+assertEq("emoji 😀 :+ 1! => 11", 11, 😀)!
+
+var var "" = 123!
+assertEq('var var "" = 123! ; "" => 123', 123, "")!
+"" :+ 1!
+assertEq('"" :+ 1! => 124', 124, "")!
+
 
 // --------------------------------------------
 print("== 19) Klasy 2.0: statyczne / auto-props / fallback ==")!
@@ -486,10 +488,10 @@ Static is a class {
 }
 
 assertEq("auto-prop default value == 1", 1, Static["value"])!
-Static["inc"] 0!
+Static["inc"](0)!
 assertEq("auto-prop po inc() == 2", 2, Static["value"])!
 assertEq("static auto-prop default == 99", 99, Static["staticVal"])!
-Static["bump"] 1!
+Static["bump"](1)!
 assertEq("static auto-prop po bump(1) == 100", 100, Static["staticVal"])!
 Static["staticVal"] :+ 1!
 assertEq("static auto-prop po :+ 1! == 101", 101, Static["staticVal"])!
@@ -569,7 +571,7 @@ import add!
 import ExportClass!
 
 assertEq("importowana wartosc dostepna", 123, sharedValue)!
-assertEq("importowana funkcja dziala", 2 + 3, add 2, 3)!
+assertEq("importowana funkcja dziala", 2 + 3, add(2, 3))!
 assertEq("importowana klasa default prop", 7, ExportClass["value"])!
 
 print("")!
