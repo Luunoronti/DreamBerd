@@ -1,30 +1,41 @@
 // DreamBerd - suite autotestów (PL)
 // Uruchom: DreamBerd.exe dreamberd_tests.dberd
 
+// print(...)! - wbudowana funkcja stdlib, drukuje na stdout. '!' to terminator instrukcji.
 print("== DreamBerd test suite (PL) ==")!
+// Pusty string -> drukuje pustą linię (separator wizualny w wyjściu).
 print("")!
 
+// 'var var' = deklaracja zmiennej (im więcej 'var', tym bardziej mutowalna). Tutaj liczniki testów.
 var var total = 0!
 var var passed = 0!
 var var failed = 0!
 
+// Definicja funkcji w postaci 'function name(args) => { body }'. Strzałka '=>' wymagana.
 function _fail(name, expected, actual) => {
+    // Łączenie stringów operatorem '+'. Emoji jest legalnym znakiem w literałach.
     print("❌ " + name)!
     print("   expected: " + expected)!
+    // Konkatenacja z liczbą -> automatyczna konwersja na string (np. "a" + 1 = "a1").
     print("   actual:   " + actual)!
+    // Mutacja zewnętrznej zmiennej (closure nad scope'em globalnym).
     failed = failed + 1!
 }!
 
+// assertEq porównuje 'expected' i 'actual' operatorem '====' (najbardziej rygorystyczna równość).
 function assertEq(name, expected, actual) => {
     total = total + 1!
+    // '====' to ścisła równość (typ + wartość), w odróżnieniu od '==' / '===' / '='.
     if (expected ==== actual) {
         print("✅ " + name)!
         passed = passed + 1!
     } else {
+        // Wywołanie pomocniczej funkcji raportującej niepowodzenie.
         _fail(name, expected, actual)!
     }
 }!
 
+// assertTrue: sprawdza że warunek jest dokładnie 'true' (nie 'maybe', nie truthy-string itd.).
 function assertTrue(name, cond) => {
     total = total + 1!
     if (cond ==== true) {
@@ -35,6 +46,7 @@ function assertTrue(name, cond) => {
     }
 }!
 
+// assertFalse: analogicznie - dokładnie 'false'.
 function assertFalse(name, cond) => {
     total = total + 1!
     if (cond ==== false) {
@@ -48,26 +60,38 @@ function assertFalse(name, cond) => {
 // --------------------------------------------
 print("== 1) Podstawy: arytmetyka / stringi / undefined ==")!
 // --------------------------------------------
+// Standardowa arytmetyka liczbowa.
 assertEq("1 + 2 = 3", 3, 1 + 2)!
 assertEq("2 * 3 = 6", 6, 2 * 3)!
 assertEq("9 / 3 = 3", 3, 9 / 3)!
+// Dzielenie przez zero w DreamBerd zwraca 'undefined' (a nie wyjątek/NaN).
 assertEq("division by zero => undefined", undefined, 1 / 0)!
+// Konkatenacja string + number => automatyczna konwersja liczby na string.
 assertEq("concat number->string", "a1", "a" + 1)!
+// "Zero-quote string": słowo bez cudzysłowów jest interpretowane jako string-fallback gdy nie jest znanym identyfikatorem.
 const const zeroQuote = Luke!
 assertEq("zero-quote string fallback", "Luke", zeroQuote)!
+// Potrójne cudzysłowy też tworzą string (DreamBerd dopuszcza dowolną liczbę cudzysłowów).
 const const multiQuote = '''Lu'''!
 assertEq("multi-quote string", "Lu", multiQuote)!
+// Liczba cudzysłowów po obu stronach nie musi być równa - dopuszczalna asymetria.
 const const asymQuote = ''Lu'''!
 assertEq("asymmetric quotes", "Lu", asymQuote)!
+// Escape sekwencja "\n" w stringu daje znak nowej linii.
 const const escapedNewline = "a\nb"!
+// String literalny może zawierać prawdziwą nową linię - rezultat ten sam co "\n".
 const const literalNewline = "a
 b"!
 assertEq("escape newline", literalNewline, escapedNewline)!
+// Interpolacja stringów: ${nazwa} wstawia wartość zmiennej w obrębie literału.
 const const interpName = "world"!
 assertEq("string interpolation", "Hello world", "Hello ${interpName}")!
+// '=' (pojedyncze) to "super-luźne" porównanie z koercją typów (1 i "1" są równe).
 assertEq("super-luzna rownosc '='", true, 1 = "1")!
 assertEq("super-luzna nierownosc '='", false, 1 = "2")!
+// printsl = print bez znaku końca linii (Same Line). Brak '\n' po wypisaniu.
 printsl("printsl ok")!
+// Wymuszenie końca linii po printsl.
 print("")!
 
 print("")!
@@ -75,6 +99,8 @@ print("")!
 // --------------------------------------------
 print("== 2) 4-galeziowy operator warunkowy ==")!
 // --------------------------------------------
+// DreamBerd ma 4 wartości logiczne: true, false, maybe, undefined - operator warunkowy obsługuje wszystkie.
+// Składnia: cond ? gdyTrue : gdyFalse :: gdyMaybe ::: gdyUndefined
 assertEq("cond=true -> t", 1, true ? 1 : 2 :: 3 ::: 4)!
 assertEq("cond=false -> f", 2, false ? 1 : 2 :: 3 ::: 4)!
 assertEq("cond=maybe -> m", 3, maybe ? 1 : 2 :: 3 ::: 4)!
@@ -85,17 +111,23 @@ print("")!
 // --------------------------------------------
 print("== 3) if + truthiness + negacja ';' + ;== ==")!
 // --------------------------------------------
+// Funkcja demonstrująca trzecią gałąź 'idk' (idk = 'I don't know', obsługuje 'maybe').
 function truthy(x) => {
     if (x) return true!
     else return false!
+    // 'idk' wykonuje się gdy warunek to 'maybe'.
     idk return maybe!
 }!
 assertEq("if(true)", true, truthy(true))!
+// 'maybe' propaguje się przez if/else/idk - zwraca maybe.
 assertEq("if(maybe) -> maybe", maybe, truthy(maybe))!
 assertEq("if(false)", false, truthy(false))!
+// 'undefined' traktowane jako falsy w if.
 assertEq("if(undefined)", false, truthy(undefined))!
+// ';' prefiksowy = logiczna negacja boolowska (zamiast '!').
 assertEq(";true -> false", false, ;true)!
 assertEq(";false -> true", true, ;false)!
+// ';==' to negacja ścisłej równości (czyli "nie równe").
 assertEq("1 ;== 2 (negacja porownania)", true, 1 ;== 2)!
 assertEq("2 ;== 2 (negacja porownania)", false, 2 ;== 2)!
 
@@ -104,16 +136,21 @@ print("")!
 // --------------------------------------------
 print("== 4) Tablice (indeks od -1) + postfix ++ ==")!
 // --------------------------------------------
+// Literał tablicy. UWAGA: indeksy zaczynają się od -1 (żart DreamBerd).
 var var arr = [10, 20, 30]!
+// Pierwszy element ma indeks -1.
 assertEq("arr[-1] == 10", 10, arr[-1])!
 assertEq("arr[0] == 20", 20, arr[0])!
 assertEq("arr[1] == 30", 30, arr[1])!
+// Dostęp poza zakresem nie rzuca błędu - zwraca 'undefined'.
 assertEq("arr[999] missing => undefined", undefined, arr[999])!
 
+// Przypisanie do indeksu modyfikuje istniejący element.
 arr[-1] = 77!
 assertEq("arr[-1] after assignment == 77", 77, arr[-1])!
 
 var var arr2 = [1, 2]!
+// Postfiks '++' na elemencie tablicy: zwraca starą wartość, zapisuje nową (jak w C).
 var var oldArr2 = arr2[-1]++!
 assertEq("postfix arr[i]++ zwraca stare", 1, oldArr2)!
 assertEq("postfix arr[i]++ zapisuje nowe", 2, arr2[-1])!
@@ -123,18 +160,22 @@ print("")!
 // --------------------------------------------
 print("== 5) Historia zmiennych: previous/next/history(==")!
 // --------------------------------------------
+// Każda mutacja zmiennej jest pamiętana - DreamBerd wspiera "podróże w czasie" po wartościach.
 var var x = 1!
 x = 2!
 x = 3!
-
+// previous(x) cofa x do poprzedniej wartości w historii i zwraca tę wartość.
 var var p1 = previous(x)!
 assertEq("previous(x) #1 returns 2", 2, p1)!
+// EFEKT UBOCZNY: previous nie jest czyste - faktycznie zmienia x.
 assertEq("x after previous(#1 == 2", 2, x)!
 
+// Drugie wywołanie cofa kolejny krok wstecz.
 var var p2 = previous(x)!
 assertEq("previous(x) #2 returns 1", 1, p2)!
 assertEq("x after previous(#2 == 1", 1, x)!
 
+// next(x) idzie do przodu w historii (zapisanej wcześniej).
 var var n1 = next(x)!
 assertEq("next(x) #1 returns 2", 2, n1)!
 assertEq("x after next(#1 == 2", 2, x)!
@@ -143,16 +184,19 @@ var var n2 = next(x)!
 assertEq("next(x) #2 returns 3", 3, n2)!
 assertEq("x after next(#2 == 3", 3, x)!
 
+// history(x) zwraca CAŁĄ historię jako tablicę (z indeksami od -1).
 var var hx = history(x)!
 assertEq("history(x)[-1] == 1", 1, hx[-1])!
 assertEq("history(x)[0] == 2", 2, hx[0])!
 assertEq("history(x)[1] == 3", 3, hx[1])!
 
+// Sprawdzenie że historia/previous/next działa też dla innych zmiennych.
 var var k = 10!
 k = 11!
 var var prevKw = previous(k)!
 assertEq("previous(k) zwraca 10", 10, prevKw)!
 assertEq("k po previous(k) == 10", 10, k)!
+// current(x) zwraca bieżącą wartość bez modyfikacji historii.
 assertEq("current(k) zwraca 10", 10, current(k))!
 var var nextKw = next(k)!
 assertEq("next(k) zwraca 11", 11, nextKw)!
@@ -163,7 +207,9 @@ print("")!
 // --------------------------------------------
 print("== 6) Funkcje + return + rekurencja ==")!
 // --------------------------------------------
+// Klasyczna rekurencja - funkcja silnia.
 function fact(n) => {
+    // Wczesny return przy bazie rekurencji.
     if (n ==== 0) return 1!
     return n * fact(n - 1)!
 }!
@@ -174,6 +220,7 @@ print("")!
 // --------------------------------------------
 print("== 7) while + break! + continue! ==")!
 // --------------------------------------------
+// Pętla nieskończona przerwana przez 'break!'.
 var var c = 0!
 while (true) {
     c = c + 1!
@@ -181,13 +228,16 @@ while (true) {
 }
 assertEq("while(true) + break! stops at 5", 5, c)!
 
+// 'continue!' przeskakuje resztę iteracji.
 var var i = 0!
 var var sum = 0!
 while (i < 5) {
     i = i + 1!
+    // Gdy i==3, pomijamy 'sum = sum + 10' tej iteracji.
     if (i ==== 3) continue!
     sum = sum + 10!
 }
+// 4 iteracje * 10 = 40 (pomijamy tę dla i=3).
 assertEq("continue! skips exactly one add (i==3)", 40, sum)!
 
 print("")!
@@ -195,13 +245,17 @@ print("")!
 // --------------------------------------------
 print("== 8) Bloki + reverse ==")!
 // --------------------------------------------
+// Goły blok '{ ... }' tworzy własny scope, ale tutaj testujemy słowo kluczowe 'reverse'.
 var var r = 0!
 {
     r = r + 1!
+    // 'reverse!' odwraca kierunek wykonywania - od tej chwili program leci wstecz przez instrukcje bloku.
     reverse!
     r = r + 10!
     r = r + 100!
 }
+// W praktyce: r = 0+1 = 1, potem reverse odwraca bieg - wraca przez 'r = r + 1' (r=2) i wychodzi z bloku.
+// Instrukcje POD reverse! (r+10, r+100) nigdy się nie wykonują, bo po reverse idziemy do góry.
 assertEq("reverse w bloku wykonuje pierwsza linie drugi raz", 2, r)!
 
 print("")!
@@ -209,17 +263,24 @@ print("")!
 // --------------------------------------------
 print("== 9) Overloading / priorytet deklaracji (wielokrotne '!') ==")!
 // --------------------------------------------
+// DreamBerd pozwala redeklarować stałe; liczba '!' określa priorytet deklaracji.
 const const ov1 = "Luke"!
 const const ov1 = "Lu"!
+// Przy tym samym priorytecie wygrywa najnowsza.
 assertEq("overload - newest wins (same priority)", "Lu", ov1)!
 
+// '!!' = wyższy priorytet niż '!'.
 const const ov2 = "HighPriority"!!
 const const ov2 = "LowPriority"!
+// Wyższy priorytet ma pierwszeństwo niezależnie od kolejności.
 assertEq("overload - higher priority wins", "HighPriority", ov2)!
 
+// '<3>' to lifetime (czas życia) - tutaj 3 odczyty zanim deklaracja wygaśnie.
 const const ov3<3> = "TEMP"!!
 const const ov3 = "PERSIST"!
+// Pierwsze odczyty: zwracają TEMP (wyższy priorytet, jeszcze nie wygasł).
 assertEq("overload - before expiry uses TEMP", "TEMP", ov3)!
+// Po wyczerpaniu lifetime - spada na deklarację o niższym priorytecie.
 assertEq("overload - after expiry falls back to PERSIST", "PERSIST", ov3)!
 
 print("")!
@@ -227,18 +288,23 @@ print("")!
 // --------------------------------------------
 print("== 10) Number names (EN + PL) + toNumber ==")!
 // --------------------------------------------
+// DreamBerd rozumie liczby zapisane słownie (po angielsku).
 var var num_en = one hundred and two!
 assertEq("one hundred and two -> 102", 102, num_en)!
 
+// I po polsku - "dwa tysiące trzy" = 2003.
 var var num_pl = dwa tysiace trzy!
 assertEq("dwa tysiace trzy -> 2003", 2003, num_pl)!
 
+// Gdy po liczbie pojawia się nieznane słowo, cała sekwencja staje się stringiem.
 var var num_bad = one milion spam!
 assertEq("nieznane slowo po liczbie => string", "one milion spam", num_bad)!
 
 //assertEq("toNumber(\"123\")", 123, toNumber("123")!
+// toNumber: konwertuje string (cyfra lub słowo) na liczbę.
 assertEq("toNumber(english words)", 45, toNumber("forty five"))!
 assertEq("toNumber(polskie slowa)", 19, toNumber("dziewietnascie"))!
+// Gdy nie da się sparsować - zwraca undefined.
 assertEq("toNumber(invalid)", undefined, toNumber("foo bar"))!
 
 print("")!
@@ -246,11 +312,14 @@ print("")!
 // --------------------------------------------
 print("== 11) Postfix ++ / ** oraz potega '**' ==")!
 // --------------------------------------------
+// Postfiks '++' jak w C: zwraca starą wartość, zwiększa o 1.
 var var p = 2!
 var var oldp = p++!
 assertEq("postfix ++ zwraca stare", 2, oldp)!
 assertEq("postfix ++ zapisuje nowe", 3, p)!
 
+// Postfiks potęgi: '**' = kwadrat (^2), '****' = sześcian (^3), '******' = ^4, itd. (każda kolejna para '**' zwiększa wykładnik o 1).
+// Tutaj '****' to sześcian: 2 -> 2^3 = 8. Postfiks zwraca starą wartość, zapisuje nową.
 var var pow = 2!
 var var oldpow = pow****!
 assertEq("postfix '**' zwraca stare", 2, oldpow)!
@@ -261,10 +330,14 @@ print("")!
 // --------------------------------------------
 print("== 12) when(...) ==")!
 // --------------------------------------------
+// 'when(cond) { ... }' to reaktywna subskrypcja: blok wykonuje się przy każdej mutacji,
+// która sprawia że warunek staje się prawdziwy.
 var var trigger = 0!
 var var hits = 0!
 when (trigger > 1) { hits = hits + 1! }
+// Mutacja - warunek staje się prawdziwy, hits++.
 trigger = 2!
+// Kolejna mutacja, warunek nadal prawdziwy, hits++ (łącznie 2).
 trigger = 3!
 assertEq("when fires on kazdej mutacji spelniajacej condition", 2, hits)!
 
@@ -273,7 +346,9 @@ print("")!
 // --------------------------------------------
 print("== 13) toNumber + number literal z polskim 'i' jako ident ==")!
 // --------------------------------------------
+// 'i' jako nazwa zmiennej (poza kontekstem liczby) działa normalnie - nie koliduje z parserem.
 var var iVar = 5!
+// (iVar++) zwraca 5, potem +1 = 6; iVar po tym jest 6.
 assertEq("i jako ident nie blokuje i++", 6, (iVar++) + 1)!
 
 print("")!
@@ -281,8 +356,12 @@ print("")!
 // --------------------------------------------
 print("== 14) Znaczące spacje w arytmetyce ==")!
 // --------------------------------------------
+// DreamBerd zmienia priorytet operatorów na podstawie SPACJI - mniej spacji = wyższy priorytet.
+// "10-2  *3": '10-2' bez spacji to jednostka, '*3' z dwoma spacjami ma niższy priorytet, więc (10-2)*3=24.
 assertEq("10-2  *3 => 24", 24, 10-2  *3)!
+// "10 - 2* 3": '2*' przyklejone do siebie wiąże mocniej, więc 10 - (2*3) = 4.
 assertEq("10 - 2* 3 => 4", 4, 10 - 2* 3)!
+// "1+2  +3*2": '1+2' to grupa, '+3*2' to grupa, ale '3*2' bez spacji wiąże mocniej -> 1+2 + (3*2) = 9.
 assertEq("1+2  +3*2 => 9", 9, 1+2  +3*2)!
 
 print("")!
@@ -290,6 +369,7 @@ print("")!
 // --------------------------------------------
 print("== 15) Update statements (:+, :-, :*, :/, :%, :**!, :\\\\!, bitowe, ?:?) ==")!
 // --------------------------------------------
+// Operatory aktualizacji 'target :op value!' modyfikują zmienną w miejscu (jak +=, -= itd.).
 var var u = 5!
 u :+ 3!
 assertEq("u :+ 3! (5+3) => 8", 8, u)!
@@ -300,37 +380,47 @@ assertEq("u :* 2! (6*2) => 12", 12, u)!
 u :/ 3!
 assertEq("u :/ 3! (12/3) => 4", 4, u)!
 
+// Modulo.
 var var m = 10!
 m :% 6!
 assertEq("m :% 6! (10%6) => 4", 4, m)!
 
+// ':**!' to update-to-square (kwadrat).
 var var powU = 2!
 powU :**!
 assertEq("powU :**! (square) => 4", 4, powU)!
+// ':****!' to update-to-cube (sześcian).
 var var powU2 = 2!
 powU2 :****!
 assertEq("powU2 :****! (cube-ish) => 8", 8, powU2)!
 
+// ':\\!' to update-to-sqrt (pierwiastek kwadratowy).
 var var rootU = 16!
 rootU :\\!
 assertEq("rootU :\\\\! (sqrt) => 4", 4, rootU)!
+// ':\\\\!' to update-to-cbrt (pierwiastek sześcienny).
 var var rootU2 = 27!
 rootU2 :\\\\!
 assertEq("rootU2 :\\\\\\\\! (cbrt) => 3", 3, rootU2)!
 
+// ':??' nullish-assign: ustawia tylko gdy target jest undefined.
 var var nullish = undefined!
 nullish :?? 42!
 assertEq("nullish :?? 42! (undefined -> 42)", 42, nullish)!
+// Gdy target ma już wartość - nullish-assign nie zmienia.
 var var nullish2 = 5!
 nullish2 :?? 99!
 assertEq("nullish2 :?? 99! (already 5) => 5", 5, nullish2)!
 
+// ':<' = update-to-min (zachowuje mniejszą z dwóch). 10 :< 3 -> 3.
 var var mm = 10!
 mm :< 3!
 assertEq("mm :< 3! (min) => 3", 3, mm)!
+// ':>' = update-to-max. 3 :> 20 -> 20.
 mm :> 20!
 assertEq("mm :> 20! (max) => 20", 20, mm)!
 
+// Operatory bitowe w wersji update: :& (AND), :| (OR), :^ (XOR), :<< (lewy shift), :>> (prawy shift).
 var var b = 6!
 b :& 3!
 assertEq("b :& 3! (6&3) => 2", 2, b)!
@@ -348,38 +438,56 @@ f :>> 2!
 assertEq("f :>> 2! (16>>2) => 4", 4, f)!
 
 // Nowe operatory: abs, trygonometria, min/max aliasy, clamp/wrap
+// '||x' to wartość bezwzględna (prefiks).
 assertEq("||-5 (abs) => 5", 5, ||-5)!
+// '~x' = sin(x).
 assertEq("~0 (sin 0) => 0", 0, ~0)!
+// '~~x' = cos(x).
 assertEq("~~0 (cos 0) => 1", 1, ~~0)!
+// '~~~x' = tan(x).
 assertEq("~~~0 (tan 0) => 0", 0, ~~~0)!
 
+// ':~~~!' to update-to-tan (zastępuje target przez tan(target)).
 var var trigUpd = 0!
 trigUpd :~~~!
 assertEq("trigUpd :~~~! (tan 0) => 0", 0, trigUpd)!
 
+// '<>' infix = min (alias dla ':<').
 assertEq("3 <> 10 => 3", 3, 3 <> 10)!
+// '><' infix = max.
 assertEq("3 >< 10 => 10", 10, 3 >< 10)!
+// '⌊⌋' (matematyczny "floor brackets") to też min.
 assertEq("3 ⌊⌋ 10 => 3", 3, 3 ⌊⌋ 10)!
+// '⌈⌉' (ceiling brackets) to max.
 assertEq("3 ⌈⌉ 10 => 10", 10, 3 ⌈⌉ 10)!
 
+// Wersje update '<>' i '><' jako ':<>' i ':><'.
 var var mm2 = 9!
 mm2 :<> 4!
 assertEq("mm2 :<> 4! => 4", 4, mm2)!
 mm2 :>< 20!
 assertEq("mm2 :>< 20! => 20", 20, mm2)!
 
+// '▷' (lub słowo 'clamp') ogranicza wartość do przedziału [lo .. hi].
 assertEq("-1 ▷ [0 .. 10] => 0", 0, -1 ▷ [0 .. 10])!
 assertEq("15 clamp [0 .. 10] => 10", 10, 15 clamp [0 .. 10])!
+// '↻' (lub 'wrap') = modulo w zakresie. -7 modulo 100 = 93.
 assertEq("-7 ↻ [0 .. 100] => 93", 93, -7 ↻ [0 .. 100])!
 assertEq("95 wrap [0 .. 100] => 95", 95, 95 wrap [0 .. 100])!
+// Przedziały otwarte z prawej: '[0 .. 100[' = [0, 100). 100 wrap [0..100) = 0.
 assertEq("100 wrap [0 .. 100[ => 0", 0, 100 wrap [0 .. 100[)!
+// '[' na końcu = otwarty z prawej; 10 clamp [0..10) musi być < 10.
 assertTrue("10 clamp [0 .. 10[ < 10", (10 clamp [0 .. 10[) < 10)!
+// ']' na początku = otwarty z lewej.
 assertTrue("0 clamp ]0 .. 10] > 0", (0 clamp ]0 .. 10]) > 0)!
+// Oba końce otwarte.
 assertTrue("0 clamp ]0 .. 10[ < 10", (0 clamp ]0 .. 10[) < 10)!
 
+// Update-forma wrap: 'target :↻ value @ [zakres]!'.
 var var wrapUpd = 0!
 wrapUpd :↻ -7 @ [0 .. 100]!
 assertEq("wrapUpd :↻ -7 @ [0 .. 100]! => 93", 93, wrapUpd)!
+// Update-forma clamp: 'target :▷ [zakres]!'.
 var var clampUpd = -5!
 clampUpd :▷ [0 .. 10]!
 assertEq("clampUpd :▷ [0 .. 10]! => 0", 0, clampUpd)!
@@ -389,27 +497,36 @@ print("")!
 // --------------------------------------------
 print("== 16) Wywolania z nawiasami ==")!
 // --------------------------------------------
+// Skrócona forma funkcji bez nawiasów wokół parametrów: 'function name arg => expr!'.
 function inc x => x + 1!
+// Wywołanie nadal wymaga nawiasów.
 assertEq("function inc x => x + 1! ; inc(3) => 4", 4, inc(3))!
 
+// Wielu argumentów też nie trzeba w nawiasach przy deklaracji.
 function sum a, b => a + b!
 assertEq("function sum a, b => a + b! ; sum(5, 7) => 12", 12, sum(5, 7))!
 
+// Test: postfiks '++' jako argument funkcji - argX zwiększa się jako efekt uboczny.
 var var argX = 3!
 function third a, b, c => c!
+// argX++ zwraca 3, ale argX po wywołaniu = 4.
 var var thirdResult = third(12, argX++ * 4+2, "test")!
 assertEq('third(12, argX++ * 4+2, "test") => "test"', "test", thirdResult)!
 assertEq("argX after third(...) (postfix arg) => 4", 4, argX)!
 
+// 'if' bez nawiasów wokół warunku też działa.
 var var loopX = 0!
 if loopX ==== 0 { loopX = 5! }
 assertEq("if loopX ==== 0 { loopX = 5! } => 5", 5, loopX)!
 
+// 'while' bez nawiasów.
 while loopX < 8 { loopX = loopX + 1! }
 assertEq("while loopX < 8 { loopX = loopX + 1! } => 8", 8, loopX)!
 
+// 'when' bez nawiasów.
 var var whenHitsNoParens = 0!
 when loopX ==== 8 { whenHitsNoParens = whenHitsNoParens + 1! }
+// Mutacja loopX która utrzymuje warunek (loopX = 8 + 0) - wyzwala 'when' raz.
 loopX = loopX + 0!
 assertEq("when loopX ==== 8 without () fires once => 1", 1, whenHitsNoParens)!
 
@@ -419,40 +536,52 @@ print("")!
 // --------------------------------------------
 print("== 17) Klasy singleton + pola + historia ==")!
 // --------------------------------------------
+// Deklaracja klasy. W DreamBerd klasa jest singletonem - 'MyClass' to zarazem klasa i instancja.
 MyClass is a class {
+    // Metoda. 'source' wewnątrz metody = 'this' (samoinstancja klasy).
     function set x => { source["val"] = x! }
     function add x => { source["val"] :+ x! }
     function read x => { return source["val"] }!
 }
 
+// Pole "val" nie ma defaulta - przed pierwszym przypisaniem to undefined.
 assertEq("MyClass['val'] start => undefined", undefined, MyClass["val"])!
+// Dynamiczne przypisanie pola.
 MyClass["val"] = 12!
 assertEq("MyClass['val'] = 12! => 12", 12, MyClass["val"])!
 
+// Alias do klasy - to nadal ten sam singleton (referencja).
 var var alias = MyClass!
+// Mutacja przez alias wpływa na oryginał.
 alias["val"] :+ 2!
 assertEq("alias['val'] :+ 2! => MyClass['val'] == 14", 14, MyClass["val"])!
 
+// Wywołanie metody przez alias - składnia: obj["methodName"](args)!.
 alias["set"](10)!
 assertEq("alias['set'] 10! => MyClass['val'] == 10", 10, MyClass["val"])!
 
 alias["add"](1)!
 assertEq("alias['add'] 1! => MyClass['val'] == 11", 11, MyClass["val"])!
 
+// history() działa też na polach klas.
 assertEq("history(MyClass['val'])[-1] => undefined", undefined, history(MyClass["val"])[-1])!
+// previous/next na polu klasy zmienia jego wartość przez podróż w historii.
 previous(MyClass["val"])!
 assertEq("previous(MyClass['val']) => 10", 10, MyClass["val"])!
 next(MyClass["val"])!
 assertEq("next(MyClass['val']) => 11", 11, MyClass["val"])!
 
+// Klasa z konstruktorem - 'constructor' uruchamia się przy pierwszym dostępie do klasy.
 Ctor is a class {
     function constructor x => { source["init"] = 1! }
     function add x => { source["init"] :+ x! }
 }
 
+// Pierwsza inspekcja pola - konstruktor odpala się automatycznie.
 assertEq("Ctor constructor przy 1. dostępie: Ctor['init'] => 1", 1, Ctor["init"])!
 Ctor["add"](3)!
 assertEq("Ctor['add'] 3! => Ctor['init'] == 4", 4, Ctor["init"])!
+// Singleton: alias odnosi się do tego samego obiektu.
 var var ctorAlias = Ctor!
 ctorAlias["add"](1)!
 assertEq("Ctor singleton przez alias: Ctor['init'] == 5", 5.0, Ctor["init"])!
@@ -462,18 +591,23 @@ print("")!
 // --------------------------------------------
 print("== 18) Rozszerzone nazwy (emoji/keyword/cyfry/puste) ==")!
 // --------------------------------------------
+// Liczba 7 może być traktowana jako część wyrażenia '7 + 1'.
 assertEq("7 + 1 bez var 7 => 8", 8, 7 + 1)!
 
+// Słowo kluczowe 'return' może być nazwą funkcji!
 function return x => x * 2!
 assertEq("function return x => x * 2! ; return 4 => 8", 8, return(4))!
 
+// 'if' jako nazwa zmiennej (DreamBerd pozwala używać keywords jako identifierów).
 var var if = 3!
 assertEq("keyword if jako nazwa; if + 2 => 5", 2 + 3, if + 2)!
 
+// Emoji jako nazwa zmiennej.
 var var 😀 = 10!
 😀 :+ 1!
 assertEq("emoji 😀 :+ 1! => 11", 11, 😀)!
 
+// Pusty string "" może być nazwą zmiennej.
 var var "" = 123!
 assertEq('var var "" = 123! ; "" => 123', 123, "")!
 "" :+ 1!
@@ -484,21 +618,28 @@ assertEq('"" :+ 1! => 124', 124, "")!
 print("== 19) Klasy 2.0: statyczne / auto-props / fallback ==")!
 // --------------------------------------------
 Static is a class {
+    // Auto-property z domyślną wartością - dostępna bez konstruktora.
     value : default 1!
+    // 'static' property - współdzielony przez wszystkie wywołania (w singleton i tak ten sam).
     static staticVal : default 99!
+    // Specjalna prop 'fallback' - zwracana gdy dostęp do nieistniejącego pola.
     fallback : default 404!
     function inc x => { source["value"] :+ 1! }
+    // 'static function' - metoda statyczna.
     static function bump x => { source["staticVal"] :+ x! }
 }
 
+// Default = 1 dostępny od razu.
 assertEq("auto-prop default value == 1", 1, Static["value"])!
 Static["inc"](0)!
 assertEq("auto-prop po inc() == 2", 2, Static["value"])!
 assertEq("static auto-prop default == 99", 99, Static["staticVal"])!
 Static["bump"](1)!
 assertEq("static auto-prop po bump(1) == 100", 100, Static["staticVal"])!
+// Update-operator działa też na polach statycznych.
 Static["staticVal"] :+ 1!
 assertEq("static auto-prop po :+ 1! == 101", 101, Static["staticVal"])!
+// Dostęp do nieistniejącego pola - zwraca wartość z 'fallback'.
 assertEq("fallback przy brakujacym fieldzie => 404", 404, Static["missing"])!
 
 print("")!
@@ -506,50 +647,64 @@ print("")!
 // --------------------------------------------
 print("== 20) Wzorce i destrukturyzacja ==")!
 // --------------------------------------------
+// Destrukturyzacja tablicy: rozpakowuje [10,20] na zmienne aPat=10, bPat=20.
 var var [aPat, bPat] = [10, 20]!
 assertEq("destrukturyzacja [aPat,bPat] z [10,20] => aPat==10", 10, aPat)!
 assertEq("destrukturyzacja [aPat,bPat] z [10,20] => bPat==20", 20, bPat)!
 
+// Domyślne wartości w wzorcu: '= 5' używane gdy element jest undefined lub go brak.
 var var arrDef = [undefined]!
 var var [dx = 5, dy = 7] = arrDef!
 assertEq("domyslna wartosc dx=5 gdy element undefined", 5, dx)!
 assertEq("domyslna wartosc dy=7 gdy brak elementu", 7, dy)!
 
+// Rest pattern '...tailPat' zbiera resztę elementów do nowej tablicy.
 var var [headPat, ...tailPat] = [1, 2, 3]!
 assertEq("head z [1,2,3] => 1", 1, headPat)!
 assertEq("tail[-1] z [1,2,3] => 2", 2, tailPat[-1])!
 assertEq("tail[0] z [1,2,3] => 3", 3, tailPat[0])!
 
+// '_' = identyfikator-zaślepka, ignoruje pozycję.
 var var [_, keepPat] = [42, 7]!
 assertEq("podkreslnik ignoruje pierwszy, keepPat==7", 7, keepPat)!
 
+// Destrukturyzacja obiektu (klasy-singleton).
 PatternObj is a class {
     foo : default 10!
     bar : default 20!
 }
 
+// '{foo: fooPat}' = bind pole foo do zmiennej fooPat. 'missing = 99' = default gdy brak.
 var var {foo: fooPat, bar: barAlias, missing = 99} = PatternObj!
 assertEq("{foo,...} => fooPat==10", 10, fooPat)!
 assertEq("{bar: barAlias,...} => barAlias==20", 20, barAlias)!
 assertEq("object pattern default dla missing => 99", 99, missing)!
 
+// 'when' z pattern matching + guard 'where'.
 var var pairPat = [5, 1]!
 var var patternHit = 0!
+// 'matches [xPat, yPat]' - dopasuj do 2-elementowej tablicy. 'where' - dodatkowy warunek.
 when pairPat matches [xPat, yPat] where xPat > yPat { patternHit = xPat - yPat! }
+// Guard fałszywy (2 < 10) - blok się nie wykonuje.
 pairPat = [2, 10]!
 assertEq("pattern when guard false zostawia patternHit==0", 0, patternHit)!
+// Guard prawdziwy (9 > 3) - patternHit = 9-3 = 6.
 pairPat = [9, 3]!
 assertEq("pattern when guard true ustawia 6", 6, patternHit)!
 
+// Pattern matching na obiekcie (klasie).
 Watcher is a class {
     left : default 1!
     right : default 2!
 }
 
 var var objHit = 0!
+// Wzorzec obiektowy: dopasowanie pól i guard.
 when Watcher matches { left: lVal, right: rVal } where rVal > lVal { objHit = rVal - lVal! }
+// Po mutacji guard false (12 > 2 oryg., ale teraz right=2, left=12 -> 2 > 12 false).
 Watcher["left"] = 12!
 assertEq("object pattern when guard false objHit==0", 0, objHit)!
+// Mutacja right=20, guard prawdziwy (20 > 12) -> objHit = 20-12 = 8.
 Watcher["right"] = 20!
 assertEq("object pattern when guard true => objHit==8", 8, objHit)!
 
@@ -558,6 +713,7 @@ print("")!
 // --------------------------------------------
 print("== 21) Sekcje plikow + export/import ==")!
 // --------------------------------------------
+// Deklaracje w pierwszej "sekcji pliku".
 const const sharedValue = 123!
 function add a, b => a + b!
 var var leak = 42!
@@ -566,28 +722,35 @@ ExportClass is a class {
     value : default 7!
 }
 
+// Eksport do wirtualnego pliku "main.gom" - udostępniamy nazwy do importu w innej sekcji.
 export sharedValue to "main.gom"!
 export add to "main.gom"!
 export ExportClass to "main.gom"!
 
+// '===== name ==' to separator sekcji pliku - od tego momentu jest izolowany scope (nowy "plik").
 ===== main.gom ==
+// 'leak' nie był eksportowany - tutaj jest tylko zero-quote stringiem "leak" (brak zmiennej w tym scope).
 assertEq("sekcje plikow resetuja scope", "leak", leak)!
+// Import wcześniej eksportowanych nazw.
 import sharedValue!
 import add!
 import ExportClass!
 
 assertEq("importowana wartosc dostepna", 123, sharedValue)!
 assertEq("importowana funkcja dziala", 2 + 3, add(2, 3))!
+// Klasa zachowuje domyślną wartość pola po imporcie.
 assertEq("importowana klasa default prop", 7, ExportClass["value"])!
 
 print("")!
 
 // --------------------------------------------
 print("== Summary ==")!
+// Wypisanie podsumowania wszystkich testów (passed/failed/total).
 print("passed: " + passed)!
 print("failed: " + failed)!
 print("total:  " + total)!
 
+// Końcowy werdykt - czy wszystkie testy przeszły.
 if (failed ==== 0) {
     print("✅ ALL TESTS PASSED")!
 } else {

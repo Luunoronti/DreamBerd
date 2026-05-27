@@ -17,6 +17,7 @@ namespace DreamberdInterpreter
 
             if (args.Length > 0)
             {
+                Console.WriteLine(args[0]);
                 var path = args[0];
                 var source = File.ReadAllText(path);
                 evaluator.CurrentDirectory = Path.GetDirectoryName(path) ?? Environment.CurrentDirectory;
